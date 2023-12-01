@@ -71,6 +71,8 @@ class WallGridworld(gym.Env):
         self.start_states = start_states
         self.steps = 0
         self.visualization_path = visualization_path
+        self.uniform_sampling_matrix = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
+        self.uniform_sampling_matrix_normalized = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
 
     def get_states(self):
         """
@@ -89,7 +91,7 @@ class WallGridworld(gym.Env):
                 [-np.inf, float('inf'), np.nan, float('nan')]:
             return [4]
         actions = []
-        for i in range(len(self.actions) - 1):
+        for i in range(len(self.actions)):#不用-1
             inc = self.neighbors[i]
             a = self.actions[i]
             nei_s = (state[0] + inc[0], state[1] + inc[1])
@@ -190,8 +192,12 @@ class WallGridworld(gym.Env):
                 random_state = random.choice(self.start_states)
                 self.curr_state = random_state
             else:
+                #print('random_state1',np.random.randint(self.h * self.w))
+                #input('Enter..')
                 random_state = np.random.randint(self.h * self.w)
                 self.curr_state = self.idx2pos(random_state)
+                print('random_state',random_state,self.curr_state)
+                #input('Enter..')
             while self.curr_state in self.terminals or self.curr_state in self.unsafe_states:
                 if self.start_states != None:
                     random_state = random.choice(self.start_states)
@@ -202,6 +208,70 @@ class WallGridworld(gym.Env):
             self.terminated = False
             self.steps = 0
             return self.state
+
+    def reset_random(self, **kwargs):
+        """
+        Reset the environment randomly
+        """
+        self.start_states = None #us-code
+        if 'states' in kwargs.keys():
+            self.curr_state = kwargs['states']
+            assert self.curr_state not in self.terminals
+            self.terminated = False
+            self.steps = 0
+            return self.state
+        else:
+            if self.start_states != None:
+                random_state = random.choice(self.start_states)
+                self.curr_state = random_state
+            else:
+                #print('random_state1',np.random.randint(self.h * self.w))
+                #input('Enter..')
+                random_state = np.random.randint(self.h * self.w)
+                self.curr_state = self.idx2pos(random_state)
+                print('random_state',random_state,self.curr_state)
+                #input('Enter..')
+            while self.curr_state in self.terminals or self.curr_state in self.unsafe_states:
+                if self.start_states != None:
+                    random_state = random.choice(self.start_states)
+                    self.curr_state = random_state
+                else:
+                    random_state = np.random.randint(self.h * self.w)
+                    self.curr_state = self.idx2pos(random_state)
+            self.terminated = False
+            self.steps = 0
+            return self.state
+
+    def uniform_sampling(self, n_max):
+        #cnt = 0
+        print('n_max',n_max)
+
+        # uniform sampling
+        for i in range(self.h):
+            for j in range(self.w):
+                self.curr_state = (i, j)
+                action_list = self.get_actions(self.curr_state)
+                for k in range(len(action_list)):
+                    for t in range(n_max):
+                        self.curr_state = (i, j)
+                        random_state_next, _, _, _ = self.step(action_list[k])
+                        self.uniform_sampling_matrix[i][j][action_list[k]][random_state_next[0]][random_state_next[1]] += 1
+                        #print('params',i, j, action_list[k], random_state_next[0], random_state_next[1])
+                        #input('enter')
+
+        # normalize to probability
+        for i in range(self.h):
+            for j in range(self.w):
+                for k in range(self.n_actions):
+                    total_num = np.sum(self.uniform_sampling_matrix[i][j][k])
+                    for m in range(self.h):
+                        for n in range(self.w):
+                            self.uniform_sampling_matrix_normalized[i][j][k][m][n] = self.uniform_sampling_matrix[i][j][k][m][n]/max(total_num,1)
+                            #if self.uniform_sampling_matrix_normalized[i][j][k][m][n] != 0 and self.uniform_sampling_matrix_normalized[i][j][k][m][n] != 1:
+                                #print('self.uniform_sampling_matrix_normalized[i][j][k][m][n]',self.uniform_sampling_matrix_normalized[i][j][k][m][n])
+                                #input('enter')
+            
+        return self.uniform_sampling_matrix_normalized
 
     def step(self, action):
         """
@@ -226,6 +296,7 @@ class WallGridworld(gym.Env):
         last_state = self.state
         next_state = st_prob[sampled_idx][0]
         reward = self.reward_mat[next_state[0]][next_state[1]]
+        #print('st_prob',st_prob)
         self.curr_state = next_state
         # return {
         #     "next_state": list(self.state),

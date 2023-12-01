@@ -108,14 +108,18 @@ class PolicyIterationLagrange(ABC):
         actions_game, obs_game, costs_game = [], [], []
         while True:
             actions, _ = self.predict(obs=obs, state=None)
+            #print('actions',actions)
             actions_game.append(actions[0])
             obs_primes, rewards, dones, infos = self.step(actions)
             if type(cost_function) is str:
                 costs = np.array([info.get(cost_function, 0) for info in infos])
+                #print('costs',costs)
                 if isinstance(self.env, VecNormalizeWithCost):
                     orig_costs = self.env.get_original_cost()
+                    #print('orig_costs1',orig_costs),该if成立
                 else:
                     orig_costs = costs
+                    #print('orig_costs2',orig_costs)
             else:
                 costs = cost_function(obs, actions)
                 orig_costs = costs
@@ -232,8 +236,12 @@ class PolicyIterationLagrange(ABC):
             # Get cost from environment.
             if type(cost_function) is str:
                 costs = np.array([info.get(cost_function, 0) for info in infos])
+                #print('costs',costs)
+                #input('Enter...')
                 if isinstance(self.env, VecNormalizeWithCost):
                     orig_costs = self.env.get_original_cost()
+                    #print('orig_costs',orig_costs)
+                    #input('Enter...')
                 else:
                     orig_costs = costs
             else:
@@ -244,7 +252,9 @@ class PolicyIterationLagrange(ABC):
             current_penalty = self.dual.nu().item()
             lag_costs = self.apply_lag * current_penalty * orig_costs[0]
             total += self.pi[x, y, action] * (rewards[0] - lag_costs + gamma_values)
-
+        #print('self.pi',x,y,self.pi)
+        #print('cost_function',const_function)
+        #input('Enter...')
         self.v_m[x, y] = total
 
     def predict(self, obs, state, deterministic=None):
@@ -253,8 +263,26 @@ class PolicyIterationLagrange(ABC):
             for c_a in range(self.n_actions):
                 if c_a not in self.admissible_actions:
                     policy_prob[c_a] = -float('inf')
+        #print('policy_prob',obs[0][0],obs[0][1],policy_prob,self.admissible_actions)
+        #input('Enter')
         best_actions = np.argwhere(policy_prob == np.amax(policy_prob)).flatten().tolist()
         action = random.choice(best_actions)
+        #print('action',action)
+        return np.asarray([action]), state
+
+    def predict_random(self, obs, state, deterministic=None):
+        """
+        predict the action randomly
+        """
+        policy_prob = copy.copy(self.pi[int(obs[0][0]), int(obs[0][1])])
+        if self.admissible_actions is not None:
+            for c_a in range(self.n_actions):
+                if c_a not in self.admissible_actions:
+                    policy_prob[c_a] = -float('inf')
+        print('policy_prob',obs[0][0],obs[0][1],policy_prob,self.admissible_actions)
+        input('Enter')
+        action = random.choice([i for i in range(len(policy_prob)) if policy_prob[i]>0 or policy_prob[i]==0]) #us-code,随机选择一个合理的行动
+        print('action',action)
         return np.asarray([action]), state
 
     def save(self, save_path):

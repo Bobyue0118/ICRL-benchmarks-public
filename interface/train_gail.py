@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 
 from common.cns_sampler import ConstrainedRLSampler
 
-cwd = os.getcwd()
+cwd = os.getcwd()#返回当前工作路径(CWD: Current Working Directory),是脚本运行的地方
 sys.path.append(cwd.replace('/interface', ''))
 from utils.env_utils import check_if_duplicate_seed
 from stable_baselines3.iteration.policy_interation_gail import PolicyIterationGail
@@ -31,7 +31,7 @@ from utils.model_utils import load_ppo_config, load_policy_iteration_config
 from utils.true_constraint_functions import get_true_cost_function
 import stable_baselines3.common.callbacks as callbacks
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")# 忽略匹配的警告
 
 
 def train(args):

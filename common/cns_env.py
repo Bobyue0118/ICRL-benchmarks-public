@@ -29,6 +29,7 @@ def make_env(env_id, env_configs, rank, log_dir, group, multi_env=False, seed=0)
                 {'train_reset_config_path': env_configs['train_reset_config_path'] + '/{0}'.format(rank)}),
         if 'external_reward' in env_configs:
             del env_configs_copy['external_reward']
+        print('what we make is:', env_id)
         env = gym.make(id=env_id, **env_configs_copy)
         env.seed(seed + rank)
         del env_configs_copy

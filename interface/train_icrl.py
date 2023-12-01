@@ -6,8 +6,9 @@ import time
 import gym
 import numpy as np
 import yaml
+from copy import copy, deepcopy
 
-cwd = os.getcwd()
+cwd = os.getcwd()#返回当前工作路径(CWD: Current Working Directory),是脚本运行的地方
 sys.path.append(cwd.replace('/interface', ''))
 from utils.true_constraint_functions import get_true_cost_function
 from stable_baselines3.iteration.policy_interation_lag import PolicyIterationLagrange
@@ -29,17 +30,20 @@ from utils.model_utils import load_ppo_config, load_policy_iteration_config
 
 import warnings  # disable warnings
 
-warnings.filterwarnings("ignore")
+from mujuco_environment.custom_envs.envs.wall_gird_word import WallGridworld
+warnings.filterwarnings("ignore")# 忽略匹配的警告
 
 
 def null_cost(x, *args):
     # Zero cost everywhere
-    return np.zeros(x.shape[:1])
+    return np.zeros(x.shape[:1])#如果a=[[1,2],[3,4]],那么a[:1]=[[1,2]]，包含最外侧的括号
 
 
 def train(config):
     # load config
-    config, debug_mode, log_file_path, partial_data, num_threads, seed = load_config(args)
+    #print('args inside the function are:',args)
+    #print('config inside the function are:',config)
+    config, debug_mode, log_file_path, partial_data, num_threads, seed = load_config(args)# 定义在utils/data_utils.py
     if num_threads > 1:
         multi_env = True
         config.update({'multi_env': True})
@@ -164,6 +168,12 @@ def train(config):
         config['Plan']['top_candidates'] = int(config['running']['sample_rollouts'])
     else:
         planning_config = None
+
+    # init uniform sampling env
+    env_configs_copy = copy(env_configs)
+    env_us = gym.make(id=config['env']['train_env_id'], **env_configs_copy)
+
+
     # init sampler
     sampler = ConstrainedRLSampler(rollouts=int(config['running']['sample_rollouts']),
                                    store_by_game=True,  # I move the step out
@@ -203,6 +213,7 @@ def train(config):
         add_next_step=False,
         log_file=log_file
     )
+    #print('expert_obs_rollouts are:',expert_obs_rollouts)
     if config['running']['store_by_game']:
         expert_obs = expert_obs_rollouts
         expert_acs = expert_acs_rollouts
@@ -296,6 +307,7 @@ def train(config):
     # Pass updated cost_function to cost wrapper (train_env, eval_env, sampling_env)
     train_env.set_cost_function(constraint_net.cost_function)
     sampling_env.set_cost_function(constraint_net.cost_function)
+    print('constraint_net.cost_function', constraint_net.cost_function)
     # visualize the cost function for gridworld
     if 'WGW' in config['env']['train_env_id']:
         ture_cost_function = get_true_cost_function(env_id=config['env']['train_env_id'], env_configs=env_configs)
@@ -378,12 +390,17 @@ def train(config):
                                              process_name='Training PPO model',
                                              log_file=log_file)
 
-        # Sample nominal trajectories
+        # Sample nominal trajectories, The nominal trajectory is a valid trajectory that is obtained from a human subject
         sync_envs_normalization(train_env, sampling_env)
         orig_observations, observations, actions, rewards, sum_rewards, lengths = sampler.sample_from_agent(
             policy_agent=nominal_agent,
             new_env=sampling_env,
         )
+
+	# uniform sampling
+        print('Uniform, sampling',env_us.uniform_sampling(100))#
+        #input('Uniform, sampling')
+        
         if config['running']['use_buffer']:
             sample_data_queue.put(obs=orig_observations,
                                   acs=actions,
@@ -547,4 +564,5 @@ def train(config):
 
 if __name__ == "__main__":
     args = read_args()
+    #print('args are:', args)
     train(args)

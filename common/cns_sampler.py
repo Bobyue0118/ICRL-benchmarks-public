@@ -77,6 +77,9 @@ class ConstrainedRLSampler:
             # Avoid double reset, as VecEnv are reset automatically
             if i == 0:
                 obs = self.env.reset()
+                #print('obs:',obs)
+                #input("Press Enter to continue...")
+
 
             done, state = False, None
             episode_sum_reward = 0.0
@@ -86,8 +89,11 @@ class ConstrainedRLSampler:
             obs_game = []
             acs_game = []
             rs_game = []
+
             while not done:
+                #input('enter0')
                 action, state = self.policy_agent.predict(obs, state=state, deterministic=False)
+                #input('enter00')
                 origin_obs_game.append(self.env.get_original_obs())
                 obs_game.append(obs)
                 acs_game.append(action)
@@ -98,6 +104,8 @@ class ConstrainedRLSampler:
                 obs, reward, done, _info = self.env.step(action)
                 if 'admissible_actions' in _info[0].keys():
                     self.policy_agent.admissible_actions = _info[0]['admissible_actions']
+                #print('_info0', _info, 'hhhh',_info[0]['admissible_actions'])
+                #input('enter0000')
                 rs_game.append(reward)
                 if not self.store_by_game:
                     all_rs.append(reward)
@@ -105,6 +113,8 @@ class ConstrainedRLSampler:
                 episode_sum_reward += reward
                 episode_length += 1
             if self.store_by_game:
+                #print('self.store_by_game',self.store_by_game)
+                #input("Press Enter to continue...")
                 origin_obs_game = np.squeeze(np.array(origin_obs_game), axis=1)
                 obs_game = np.squeeze(np.array(obs_game), axis=1)
                 acs_game = np.squeeze(np.array(acs_game), axis=1)
@@ -118,6 +128,97 @@ class ConstrainedRLSampler:
             lengths.append(episode_length)
 
         # if self.store_by_game:
+        #print('all_orig_obs, all_obs, all_acs, all_rs, sum_rewards, lengths',all_orig_obs, all_obs, all_acs, all_rs, sum_rewards, lengths)
+        #print('all_orig_obs',all_orig_obs)#all states of trajectories
+        #print('all_obs',all_obs)#all states of trajectories
+        #print('all_acs',all_acs)#all actions of trajectories
+        #print('all_rs',all_rs)#all rewards of trajectories
+        #print('sum_rewards',sum_rewards)# summed rewards of trajectories
+        #print('lengths',lengths)#lengths of trajectories
+        #input("Press Enter to continue...")
+
+        return all_orig_obs, all_obs, all_acs, all_rs, sum_rewards, lengths
+        # else:
+        #     all_orig_obs = np.squeeze(np.array(all_orig_obs), axis=1)
+        #     all_obs = np.squeeze(np.array(all_obs), axis=1)
+        #     all_acs = np.squeeze(np.array(all_acs), axis=1)
+        #     all_rs = np.array(all_rs)
+        #     sum_rewards = np.squeeze(np.array(sum_rewards), axis=1)
+        #     lengths = np.array(lengths)
+        #     return all_orig_obs, all_obs, all_acs, all_rs, sum_rewards, lengths
+
+    def single_thread_sample_with_uniform_sampling(self):
+        """
+        uniform sampling under nominal agent
+        """
+        if isinstance(self.env, vec_env.VecEnv):
+            assert self.env.num_envs == 1, "You must pass only one environment when using this function"
+        all_orig_obs, all_obs, all_acs, all_rs = [], [], [], []
+        sum_rewards, lengths = [], []
+        for i in range(self.rollouts):
+            # Avoid double reset, as VecEnv are reset automatically
+            if i == 0:
+                obs = self.env.reset()
+                print('obs:',obs)
+                input("Press Enter to continue...")
+
+
+            done, state = False, None
+            episode_sum_reward = 0.0
+            episode_length = 0
+
+            origin_obs_game = []
+            obs_game = []
+            acs_game = []
+            rs_game = []
+            cnt = 0 #us-code
+            while not done and cnt <= 100: #us-code
+                input('enter0')
+                action, state = self.policy_agent.predict(obs, state=state, deterministic=False)
+                input('enter00')
+                origin_obs_game.append(self.env.get_original_obs())
+                obs_game.append(obs)
+                acs_game.append(action)
+                if not self.store_by_game:
+                    all_orig_obs.append(self.env.get_original_obs())
+                    all_obs.append(obs)
+                    all_acs.append(action)
+                obs, reward, done, _info = self.env.step(action)
+                if 'admissible_actions' in _info[0].keys():
+                    self.policy_agent.admissible_actions = _info[0]['admissible_actions']
+                print('_info0', _info, 'hhhh',_info[0]['admissible_actions'])
+                input('enter0000')
+                rs_game.append(reward)
+                if not self.store_by_game:
+                    all_rs.append(reward)
+
+                episode_sum_reward += reward
+                cnt += 1 #us-code
+                episode_length += 1
+            if self.store_by_game:
+                #print('self.store_by_game',self.store_by_game)
+                #input("Press Enter to continue...")
+                origin_obs_game = np.squeeze(np.array(origin_obs_game), axis=1)
+                obs_game = np.squeeze(np.array(obs_game), axis=1)
+                acs_game = np.squeeze(np.array(acs_game), axis=1)
+                rs_game = np.squeeze(np.asarray(rs_game))
+                all_orig_obs.append(origin_obs_game)
+                all_obs.append(obs_game)
+                all_acs.append(acs_game)
+                all_rs.append(rs_game)
+
+            sum_rewards.append(episode_sum_reward)
+            lengths.append(episode_length)
+
+        # if self.store_by_game:
+        #print('all_orig_obs, all_obs, all_acs, all_rs, sum_rewards, lengths',all_orig_obs, all_obs, all_acs, all_rs, sum_rewards, lengths)
+        #print('all_orig_obs',all_orig_obs)#all states of trajectories
+        #print('all_obs',all_obs)#all states of trajectories
+        #print('all_acs',all_acs)#all actions of trajectories
+        #print('all_rs',all_rs)#all rewards of trajectories
+        #print('sum_rewards',sum_rewards)# summed rewards of trajectories
+        #print('lengths',lengths)#lengths of trajectories
+        #input("Press Enter to continue...")
         return all_orig_obs, all_obs, all_acs, all_rs, sum_rewards, lengths
         # else:
         #     all_orig_obs = np.squeeze(np.array(all_orig_obs), axis=1)

@@ -6,3 +6,4 @@ from custom_envs.envs.walker import *
 from custom_envs.envs.two_bridges import *
 from custom_envs.envs.three_bridges import *
 from custom_envs.envs.lap_grid_world import *
+from custom_envs.envs.wall_gird_word import *
