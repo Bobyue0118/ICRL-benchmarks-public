@@ -47,6 +47,7 @@ class ConstraintDiscrete(nn.Module):
     def _build(self) -> None:
         self.cost_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.cost_matrix_sa = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
+        self.cost_matrix_zero = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.expert_policy_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
         self.expert_policy_matrix_copy = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
         self.recon_obs = False
@@ -61,6 +62,17 @@ class ConstraintDiscrete(nn.Module):
         #print('np.asarray(cost)',np.asarray(cost),obs.shape[0])
         #input('Enter...')
         return np.asarray(cost)
+
+    def cost_function_zero(self, obs: np.ndarray, acs: np.ndarray, force_mode: str = None) -> np.ndarray:
+        cost = []
+        for i in range(obs.shape[0]):
+            cost.append(self.cost_matrix_zero[int(obs[i, 0])][int(obs[i, 1])])
+        #print('obs',obs)
+        #print('self.cost_matrix',self.cost_matrix)
+        #print('cost',cost)
+        #print('np.asarray(cost)',np.asarray(cost),obs.shape[0])
+        #input('Enter...')
+        return np.asarray(cost)    
 
     def expert_policy(self):
         """
@@ -132,7 +144,7 @@ class ConstraintDiscrete(nn.Module):
     ) -> Dict[str, Any]:
 
         A = np.round(kwargs['advantage_function'],2) # 防止某些明明是0，但是因为精度，比0大一点的也被下面算进去
-        print('A:',A)
+        #print('A:',A)
 
         # from c(s,a) to c(s)
         for i in range(self.h):
