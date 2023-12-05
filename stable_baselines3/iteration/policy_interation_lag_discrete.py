@@ -59,6 +59,7 @@ class PolicyIterationLagrange(ABC):
         self.neighbors= [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]
         self._setup_model()
         self.indicator = 5
+        #self.env_for_us = None
         
 
     def _setup_model(self) -> None:
@@ -88,6 +89,7 @@ class PolicyIterationLagrange(ABC):
                             pi[x][y][action] = 0
                     pi[x][y] = pi[x][y] * 1/np.sum(pi[x][y])
         #print('pi',pi) 
+        #input('pi')
         return pi
   
     # get current policy
@@ -95,10 +97,12 @@ class PolicyIterationLagrange(ABC):
         return self.pi
 
     def learn(self,
+              #env_for_us,
               total_timesteps: int,
               cost_function: Union[str, Callable],
               latent_info_str: Union[str, Callable] = '',
               callback=None, ):
+        #self.env_for_us = env_for_us
         policy_stable, dual_stable = False, False
         iter = 0
         for iter in tqdm(range(total_timesteps)):
@@ -108,6 +112,8 @@ class PolicyIterationLagrange(ABC):
             self.num_timesteps += 1
             # Run the policy evaluation
             self.policy_evaluation(cost_function)
+            #print('self.v_m1',self.v_m)
+            #input('self.v_m1')
             # Run the policy improvement algorithm
             policy_stable = self.policy_improvement(cost_function)
             cumu_reward, length, dual_stable = self.dual_update(cost_function)
@@ -118,33 +124,53 @@ class PolicyIterationLagrange(ABC):
 
     # expert learn its value function, Q-value function, thus advantage function
     def expert_learn(self,
+              #env_for_us,
               total_timesteps: int,
               cost_function: Union[str, Callable],
-              expert_policy: np.ndarray, 
+              expert_policy: np.ndarray,
+              v_m: np.ndarray, 
               latent_info_str: Union[str, Callable] = '',
+              transition=None,
               callback=None,):
+        #self.env_for_us = env_for_us
         policy_stable, dual_stable = False, False
         iter = 0
         self.pi=expert_policy
         #self.pi = self.get_equiprobable_policy()
-        print('self.pi',np.round(self.pi,2))
-        input('self.pi')
-        for iter in tqdm(range(1)):#need only once policy evaluation
-            if policy_stable and dual_stable:
-                print("\nStable at Iteration {0}.".format(iter), file=self.log_file)
-                break
-            self.num_timesteps += 1
+        #print('self.pi',np.round(self.pi,2))
+        #input('self.pi')
+        #for iter in tqdm(range(1)):#need only once policy evaluation
+            #if policy_stable and dual_stable:
+                #print("\nStable at Iteration {0}.".format(iter), file=self.log_file)
+                #break
+            #self.num_timesteps += 1
             # Run the policy evaluation
-            self.policy_evaluation(cost_function)
+            #self.policy_evaluation(cost_function)
             # Run the policy improvement algorithm
             #policy_stable = self.policy_improvement(cost_function)
             #cumu_reward, length, dual_stable = self.dual_update(cost_function)
         #logger.record("train/iterations", iter)
         #logger.record("train/cumulative rewards", cumu_reward)
         #logger.record("train/length", length)
-        return self.v_m
+        self.v_m = v_m
+        Q = np.zeros((self.height, self.width, self.n_actions))
+        A = np.zeros((self.height, self.width, self.n_actions))
+        if transition is not None:
+            for i in range(self.height):
+                for j in range(self.width):
+                    for k in range(self.n_actions):
+                        for i1 in range(self.height):
+                            for j1 in range(self.width):
+                                if transition[i][j][k][i1][j1]!=0:
+                                    Q[i][j][k] += self.gamma*transition[i][j][k][i1][j1]*self.v_m[i1][j1]
+                        if Q[i][j][k] - self.v_m[i][j] > 0:
+                            A[i][j][k] = Q[i][j][k] - self.v_m[i][j] 
+        
+                    
+        return self.v_m, Q, A
 
     def step(self, action):
+        #input('\nstep0')
         return self.env.step(np.asarray([action]))
 
     def dual_update(self, cost_function):
@@ -295,6 +321,7 @@ class PolicyIterationLagrange(ABC):
 
             # Get next state
             s_primes, rewards, dones, infos = self.step(action)
+            #print('\nstep:',x,y,action,s_primes, rewards)
             # Get cost from environment.
             if type(cost_function) is str:
                 costs = np.array([info.get(cost_function, 0) for info in infos])
@@ -322,6 +349,9 @@ class PolicyIterationLagrange(ABC):
         #print('cost_function',const_function)
         #input('Enter...')
         self.v_m[x, y] = total
+        #if x == 4 and y == 0:
+            #print('\n',x,y,self.v_m,'\n\n',np.round(self.pi[x,y],2),self.gamma)
+            #input('self.v_m')
 
     def predict(self, obs, state, deterministic=None):
         policy_prob = copy.copy(self.pi[int(obs[0][0]), int(obs[0][1])])

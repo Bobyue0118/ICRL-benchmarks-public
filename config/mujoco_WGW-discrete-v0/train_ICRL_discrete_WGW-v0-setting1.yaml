@@ -36,7 +36,7 @@ iteration:
   max_iter: 20 #20
   penalty_initial_value: 0.1
   penalty_learning_rate: 0.1
-  gamma: 0.7
+  gamma: 0.7 #0.7
   reset_policy: False
   reset_every: null
   nu_max_clamp: 1

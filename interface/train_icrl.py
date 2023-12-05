@@ -396,6 +396,7 @@ def train(config):
                 nominal_agent.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=config['env']['cost_info_str'],  # Cost should come from cost wrapper
+                #env_for_us=env_us,
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
@@ -407,14 +408,15 @@ def train(config):
                 expert_value_function_unsafe = nominal_agent0.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=config['env']['cost_info_str'],  # Cost should come from cost wrapper
+                #env_for_us=env_us,
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
                 timesteps += nominal_agent0.num_timesteps
             optimal_policy_without_constraint = nominal_agent0.get_policy()
             expert_policy_unsafe = deepcopy(optimal_policy_without_constraint)#save the value instead of the function
-            print('expert policy for unsafe states:\n',np.round(expert_policy_unsafe,2))
-            input('expert policy unsafe')
+            #print('expert policy for unsafe states:\n',np.round(expert_policy_unsafe,2))
+            #input('expert policy unsafe')
             #print('expert value function\n', np.round(expert_value_function,3))
             #input('itr:2')
             #for unsafe_state in env_configs['unsafe_states']:
@@ -425,6 +427,7 @@ def train(config):
                 expert_value_function = nominal_agent1.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=ture_cost_function,  # Cost should come from cost wrapper
+                #env_for_us=env_us,
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
@@ -433,35 +436,42 @@ def train(config):
             #print('expert policy for safe states:\n',optimal_policy_with_true_constraint)
             #input('expert_policy_safe')
             expert_policy = deepcopy(optimal_policy_with_true_constraint)
-            print('expert policy for safe states\n', np.round(expert_policy,2))
-            input('expert policy safe')
+            #print('expert policy for safe states\n', np.round(expert_policy,2))
+            #input('expert policy safe')
             # for those unsafe states, the expert policy is defined as the optimal policy without constraint
             for unsafe_state in env_configs['unsafe_states']:
                 #print('unsafe_state', unsafe_state)
                 expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
-            print('expert policy for complete\n', np.round(expert_policy,2))
-            input('expert policy complete')
-            print('expert value function safe\n', np.round(expert_value_function,3))
-            input('itr:1')
-
-            
+            #print('expert policy for complete\n', np.round(expert_policy,2))
+            #input('expert policy complete')
+            #print('expert value function safe\n', np.round(expert_value_function,3))
+            #input('itr:1')
 
 
-        # get V(s) based on the expert policy and transition model from uniform sampling
+        # get V(s), thus Q and advantage function
+        # unsafe states的V(s)直接替换就行，不能更换expert policy后再policy evaluation，否则会和unsafe情形一样了。
         if itr == 2:
+            for unsafe_state in env_configs['unsafe_states']:
+                expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
             with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function = nominal_agent2.expert_learn(
+                expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
                 total_timesteps=forward_timesteps,
-                expert_policy = expert_policy,
                 cost_function=ture_cost_function,  # Cost should come from cost wrapper
+                expert_policy = expert_policy,
+                v_m = expert_value_function,
+                #env_for_us=env_us,
+                transition=transition,
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
                 timesteps += nominal_agent2.num_timesteps
-            for unsafe_state in env_configs['unsafe_states']:
-                expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
-            print('expert value function complete\n', np.round(expert_value_function,3))
-            input('itr:2')
+            
+
+            #print('expert value function complete\n', np.round(expert_value_function,3))
+            #print('Q value function complete\n', np.round(Q_value_function,3))
+            #print('advantage function complete\n', np.round(advantage_function,3))
+            #input('itr:2')
+
 
 
         # monitor the memory and running time
@@ -509,7 +519,7 @@ def train(config):
 
         # update after we have V(s)
         # Update constraint net
-        if itr >= 3:
+        if itr >= 2:
             mean, var = None, None
             if config['CN']['cn_normalize']:
                 mean, var = sampling_env.obs_rms.mean, sampling_env.obs_rms.var
@@ -521,7 +531,8 @@ def train(config):
                                                             obs_mean=mean,
                                                             obs_var=var,
                                                             env_configs=env_configs,
-                                                            current_progress_remaining=current_progress_remaining)
+                                                            current_progress_remaining=current_progress_remaining,
+                                                            advantage_function=advantage_function)
             else:  # normal update
                 backward_metrics = constraint_net.train_nn(iterations=config['CN']['backward_iters'],
                                                        nominal_obs=sample_obs,
@@ -535,7 +546,7 @@ def train(config):
                                              process_name='Training CN model', log_file=log_file)
 
         # Pass updated cost_function to cost wrapper (train_env, eval_env, sampling_env)
-        if itr >= 3:
+        if itr >= 2:
             train_env.set_cost_function(constraint_net.cost_function)
             sampling_env.set_cost_function(constraint_net.cost_function)
 

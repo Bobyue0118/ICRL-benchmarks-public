@@ -276,6 +276,50 @@ class WallGridworld(gym.Env):
         """
         Step the environment.
         """
+        #print('step1:')
+        action = int(action)
+        if self.terminal(self.state):
+            self.terminated = True
+            self.steps += 1
+            admissible_actions = self.get_actions(self.curr_state)
+            return (list(self.state),
+                    0,
+                    True,
+                    {'x_position': self.state[0],
+                     'y_position': self.state[1],
+                     'admissible_actions': admissible_actions,
+                     },
+                    )
+        self.terminated = False
+        st_prob = self.get_next_states_and_probs(self.state, action)
+        sampled_idx = np.random.choice(np.arange(0, len(st_prob)), p=[prob for st, prob in st_prob])
+        last_state = self.state
+        next_state = st_prob[sampled_idx][0]
+        reward = self.reward_mat[next_state[0]][next_state[1]]
+        #print('st_prob',st_prob)
+        self.curr_state = next_state
+        # return {
+        #     "next_state": list(self.state),
+        #     "reward": reward,
+        #     "done": False,
+        #     "info": {}
+        # }
+        self.steps += 1
+        admissible_actions = self.get_actions(self.curr_state)
+        return (list(self.state),
+                reward,
+                False,
+                {'y_position': self.state[0],
+                 'x_position': self.state[1],
+                 'admissible_actions': admissible_actions,
+                 },
+                )
+
+    def step_from_us(self, action):
+        """
+        Step the environment.
+        """
+        #print('step2')
         action = int(action)
         if self.terminal(self.state):
             self.terminated = True

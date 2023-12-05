@@ -6,3 +6,4 @@ uniform sampling在sample_from_agent()中，self.env.reset()设置初始位置�
 1. self.start_states = None #us-code, wall_grid_world的reset()中
 2. action = random.choice(n_actions) #us-code, policy_iteration_lag的predict中
 3. cnt = 0 #us-code, cns_sampler.py, single_thread_sample_with_policy(self)
+4. 在uniform sampling时，需要将env_utils.py中的class MujocoExternalSignalWrapper(gym.Wrapper):def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[Any, Any]]: obs, reward, done, info = self.env.step_from_us(action)，修改step为step_from_us
