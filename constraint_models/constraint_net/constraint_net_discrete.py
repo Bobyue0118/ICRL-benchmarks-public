@@ -44,10 +44,11 @@ class ConstraintDiscrete(nn.Module):
         """
         obtain expert policy from expert data
         """
-        for i in range(len(self.expert_obs)):
-            for j in range(len(self.expert_obs[i])):
+        for i in range(len(self.expert_obs)):#有多少条专家轨迹
+            for j in range(len(self.expert_obs[i])):#每条专家轨迹多长
                 self.expert_policy_matrix[self.expert_obs[i][j][0],self.expert_obs[i][j][1],self.expert_acs[i][j]] += 1
         print('self.expert_policy_matrix',self.expert_policy_matrix)
+        input('expert_policy')
 
         for i in range(self.env_configs['map_height']):
             for j in range(self.env_configs['map_width']):

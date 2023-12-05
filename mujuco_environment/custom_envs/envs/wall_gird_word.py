@@ -245,15 +245,14 @@ class WallGridworld(gym.Env):
     def uniform_sampling(self, n_max):
         #cnt = 0
         print('n_max',n_max)
-
         # uniform sampling
         for i in range(self.h):
             for j in range(self.w):
-                self.curr_state = (i, j)
+                self.curr_state = [i, j]
                 action_list = self.get_actions(self.curr_state)
                 for k in range(len(action_list)):
                     for t in range(n_max):
-                        self.curr_state = (i, j)
+                        self.curr_state = [i, j]
                         random_state_next, _, _, _ = self.step(action_list[k])
                         self.uniform_sampling_matrix[i][j][action_list[k]][random_state_next[0]][random_state_next[1]] += 1
                         #print('params',i, j, action_list[k], random_state_next[0], random_state_next[1])

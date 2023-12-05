@@ -70,6 +70,10 @@ def wall_circle(r, x0, y0, obs, acs):
 
 
 def wall_in(unsafe_states, obs, acs):
+    #print('obs:',obs)
+    #print('unsafe_states',unsafe_states)
+    #print('(obs in unsafe_states)',(obs in unsafe_states))
+    #input('obs')
     if isinstance(obs, list):
         return (obs in unsafe_states)
     elif isinstance(obs, np.ndarray):
@@ -77,6 +81,8 @@ def wall_in(unsafe_states, obs, acs):
         for i in range(len(obs)):
             tmp = obs[i].tolist()
             costs.append(float(tmp in unsafe_states))
+        #print('true constraint cost',np.asarray(costs))
+        #input('enter')
         return np.asarray(costs)
 
 
