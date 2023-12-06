@@ -21,6 +21,7 @@ class PolicyIterationLagrange(ABC):
                  env: Union[GymEnv, str],
                  max_iter: int,
                  n_actions: int,
+                 reward_states: list,
                  height: int,  # table length
                  width: int,  # table width
                  terminal_states: int,
@@ -34,7 +35,7 @@ class PolicyIterationLagrange(ABC):
                  penalty_learning_rate: float = 0.01,
                  penalty_min_value: Optional[float] = None,
                  penalty_max_value: Optional[float] = None,
-                 log_file=None,
+                 log_file=None
                  ):
         super(PolicyIterationLagrange, self).__init__()
         self.stopping_threshold = stopping_threshold
@@ -51,14 +52,37 @@ class PolicyIterationLagrange(ABC):
         self.penalty_initial_value = penalty_initial_value
         self.penalty_min_value = penalty_min_value
         self.penalty_max_value = penalty_max_value
+        self.reward_states = reward_states
         self.penalty_learning_rate = penalty_learning_rate
         self.apply_lag = apply_lag
         self.budget = budget
         self.num_timesteps = 0
         self.admissible_actions = None
-        self.neighbors= [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]
+        if self.n_actions == 9:
+            self.neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1), (0, 0)]  # effect of each movement
+            self.actions = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+            #self.n_actions = len(self.actions)
+            self.dirs = {0: 'r', 1: 'l', 2: 'd', 3: 'u', 4: 'rd', 5: 'ru', 6: 'ld', 7: 'lu', 8: 's'}
+            #self.action_space = gym.spaces.Discrete(9)
+        elif self.n_actions == 8:
+            self.neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]  # effect of each movement
+            self.actions = [0, 1, 2, 3, 4, 5, 6, 7]
+            #self.n_actions = len(self.actions)
+            self.dirs = {0: 'r', 1: 'l', 2: 'd', 3: 'u', 4: 'rd', 5: 'ru', 6: 'ld', 7: 'lu'}
+            #self.action_space = gym.spaces.Discrete(8)
+        elif self.n_actions == 4:
+            self.neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # effect of each movement
+            self.actions = [0, 1, 2, 3]
+            #self.n_actions = len(self.actions)
+            self.dirs = {0: 'r', 1: 'l', 2: 'd', 3: 'u'}
+            #self.action_space = gym.spaces.Discrete(4)
+        else:
+            raise EnvironmentError("Unknown number of actions {0}.".format(n_actions))
         self._setup_model()
         self.indicator = 5
+        self.reward_mat = np.zeros((self.height, self.width))
+        for reward_pos in self.reward_states:
+            self.reward_mat[reward_pos[0], reward_pos[1]] = 1
         #self.env_for_us = None
         
 
@@ -100,6 +124,7 @@ class PolicyIterationLagrange(ABC):
               #env_for_us,
               total_timesteps: int,
               cost_function: Union[str, Callable],
+              transition: np.ndarray,
               latent_info_str: Union[str, Callable] = '',
               callback=None, ):
         #self.env_for_us = env_for_us
@@ -111,11 +136,11 @@ class PolicyIterationLagrange(ABC):
                 break
             self.num_timesteps += 1
             # Run the policy evaluation
-            self.policy_evaluation(cost_function)
+            self.policy_evaluation(cost_function, transition)
             #print('self.v_m1',self.v_m)
             #input('self.v_m1')
             # Run the policy improvement algorithm
-            policy_stable = self.policy_improvement(cost_function)
+            policy_stable = self.policy_improvement(cost_function, transition)
             cumu_reward, length, dual_stable = self.dual_update(cost_function)
         logger.record("train/iterations", iter)
         logger.record("train/cumulative rewards", cumu_reward)
@@ -218,7 +243,7 @@ class PolicyIterationLagrange(ABC):
         dual_stable = True if costs_game_mean == 0 else False
         return cumu_reward, length, dual_stable
 
-    def policy_evaluation(self, cost_function):
+    def policy_evaluation(self, cost_function, transition):
         iter = 0
 
         delta = self.stopping_threshold + 1
@@ -230,14 +255,14 @@ class PolicyIterationLagrange(ABC):
             for x in range(self.height):
                 for y in range(self.width):
                     # Run one iteration of the Bellman update rule for the value function
-                    self.bellman_update(old_v, x, y, cost_function)
+                    self.bellman_update(old_v, x, y, cost_function, transition)
                     # Compute difference
                     delta = max(delta, abs(old_v[x, y] - self.v_m[x, y]))
             iter += 1
         print("\n\nThe Policy Evaluation algorithm converged after {} iterations".format(iter),
               file=self.log_file)
 
-    def policy_improvement(self, cost_function):
+    def policy_improvement(self, cost_function, transition):
         """Applies the Policy Improvement step."""
         policy_stable = True
         # Iterate states
@@ -258,26 +283,19 @@ class PolicyIterationLagrange(ABC):
                     if not ((0<=next_state[0]<self.height) and (0<=next_state[1]<self.width)):
                         action_values.append(-np.inf)
                         continue
-                    s_primes, rewards, dones, infos = self.step(action)
-                    
+                    #s_primes, rewards, dones, infos = self.step(action)
+                    s_primes = [[x+self.neighbors[action][0],y+self.neighbors[action][1]]]
+                    rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
                     # Get cost from environment.
-                    if type(cost_function) is str:
-                        costs = np.array([info.get(cost_function, 0) for info in infos])
-                        if isinstance(self.env, VecNormalizeWithCost):
-                            orig_costs = self.env.get_original_cost()
-                            #第0轮, cost_function全零
-                            #if orig_costs[0]!=0:
-                            	#input('orig_costs!=0:')
-                        else:
-                            orig_costs = costs
-                    else:
-                        costs = cost_function(states, [action])
-                        orig_costs = costs
+                    costs = cost_function(np.array(s_primes), [action])
+                    orig_costs = costs
                     current_penalty = self.dual.nu().item()
                     lag_costs = self.apply_lag * current_penalty * orig_costs[0]
                     # Get value
                     curr_val = rewards[0] - lag_costs + self.gamma * self.v_m[s_primes[0][0], s_primes[0][1]]
                     # curr_val = self.v_m[s_primes[0][0], s_primes[0][1]]
+                    curr_val = transition[x, y, action, s_primes[0][0], s_primes[0][1]] * curr_val
+                    #curr_val = 1 * curr_val
                     action_values.append(curr_val)
                 #print('action_values',x,y,action_values)
                 #input('')
@@ -306,41 +324,32 @@ class PolicyIterationLagrange(ABC):
         for a in range(self.n_actions):
             self.pi[x, y, a] = prob if a in best_actions else 0
 
-    def bellman_update(self, old_v, x, y, cost_function):
+    def bellman_update(self, old_v, x, y, cost_function, transition):
         if [x, y] in self.terminal_states:
             return
         total = 0
         for action in range(self.n_actions):
             states = self.env.reset_with_values(info_dicts=[{'states': [x, y]}])
             assert states[0][0] == x and states[0][1] == y
-            # Compute next state, but not the same
-            # if the action is invalid, continue
+            # allow only valid action
             next_state = [x+self.neighbors[action][0], y+self.neighbors[action][1]]
             if not ((0<=next_state[0]<self.height) and (0<=next_state[1]<self.width)):
                 continue
 
-            # Get next state
-            s_primes, rewards, dones, infos = self.step(action)
-            #print('\nstep:',x,y,action,s_primes, rewards)
+            s_primes = [[x+self.neighbors[action][0],y+self.neighbors[action][1]]]
+            rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
+            #print('rewards,s_primes',rewards, s_primes)
+            #input('rewards')
             # Get cost from environment.
-            if type(cost_function) is str:
-                costs = np.array([info.get(cost_function, 0) for info in infos])
-                #print('costs',costs)
-                #input('Enter...')
-                if isinstance(self.env, VecNormalizeWithCost):
-                    orig_costs = self.env.get_original_cost()
-                    #print('orig_costs',orig_costs)
-                    #input('Enter...')
-                else:
-                    orig_costs = costs
-            else:
-                costs = cost_function(states, [action])
-                orig_costs = costs
-            # print(x, y, rewards[0], orig_costs[0])
+            costs = cost_function(np.array(s_primes), [action]) #refer to constraint_net_discrete.py
+            orig_costs = costs
+            #print(orig_costs[0])
+            #input('orig_costs[0]')
             gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
             current_penalty = self.dual.nu().item()
             lag_costs = self.apply_lag * current_penalty * orig_costs[0]
-            total += self.pi[x, y, action] * (rewards[0] - lag_costs + gamma_values)
+            total += self.pi[x, y, action] * transition[x, y, action, s_primes[0][0], s_primes[0][1]]*(rewards[0] - lag_costs + gamma_values)
+            #total += self.pi[x, y, action] * 1*(rewards[0] - lag_costs + gamma_values)
         #if x==3 and y in [0,1,2,3,4] and self.indicator>0:
             #print('self.apply_lag * current_penalty',self.apply_lag, current_penalty, orig_costs[0])
             #self.indicator -= 1
@@ -349,9 +358,7 @@ class PolicyIterationLagrange(ABC):
         #print('cost_function',const_function)
         #input('Enter...')
         self.v_m[x, y] = total
-        #if x == 4 and y == 0:
-            #print('\n',x,y,self.v_m,'\n\n',np.round(self.pi[x,y],2),self.gamma)
-            #input('self.v_m')
+
 
     def predict(self, obs, state, deterministic=None):
         policy_prob = copy.copy(self.pi[int(obs[0][0]), int(obs[0][1])])

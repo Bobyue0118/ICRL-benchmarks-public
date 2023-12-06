@@ -245,6 +245,8 @@ class WallGridworld(gym.Env):
     def uniform_sampling(self, n_max):
         #cnt = 0
         print('n_max',n_max)
+        #if self.uniform_sampling_matrix_normalized.any() == True:
+            #input('接着更新')
         # uniform sampling
         for i in range(self.h):
             for j in range(self.w):
@@ -266,9 +268,6 @@ class WallGridworld(gym.Env):
                     for m in range(self.h):
                         for n in range(self.w):
                             self.uniform_sampling_matrix_normalized[i][j][k][m][n] = self.uniform_sampling_matrix[i][j][k][m][n]/max(total_num,1)
-                            #if self.uniform_sampling_matrix_normalized[i][j][k][m][n] != 0 and self.uniform_sampling_matrix_normalized[i][j][k][m][n] != 1:
-                                #print('self.uniform_sampling_matrix_normalized[i][j][k][m][n]',self.uniform_sampling_matrix_normalized[i][j][k][m][n])
-                                #input('enter')
             
         return self.uniform_sampling_matrix_normalized
 
@@ -276,7 +275,6 @@ class WallGridworld(gym.Env):
         """
         Step the environment.
         """
-        #print('step1:')
         action = int(action)
         if self.terminal(self.state):
             self.terminated = True
@@ -296,7 +294,6 @@ class WallGridworld(gym.Env):
         last_state = self.state
         next_state = st_prob[sampled_idx][0]
         reward = self.reward_mat[next_state[0]][next_state[1]]
-        #print('st_prob',st_prob)
         self.curr_state = next_state
         # return {
         #     "next_state": list(self.state),
@@ -314,7 +311,7 @@ class WallGridworld(gym.Env):
                  'admissible_actions': admissible_actions,
                  },
                 )
-
+            
     def step_from_us(self, action):
         """
         Step the environment.

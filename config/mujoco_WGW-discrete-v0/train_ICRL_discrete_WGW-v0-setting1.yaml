@@ -19,7 +19,7 @@ env:
   visualize_info_ranges: [ [ 0, 6 ], [ 0, 6 ]  ]  #  [ [ 0, 7 ], [ 0, 7 ]  ]
 
 running:
-  n_iters: 20 #20
+  n_iters: 30 #20
   n_eval_episodes: 10
   save_every: 1
   expert_rollouts: 20

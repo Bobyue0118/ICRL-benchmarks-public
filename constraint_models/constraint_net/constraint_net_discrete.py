@@ -142,7 +142,8 @@ class ConstraintDiscrete(nn.Module):
             nominal_obs: np.ndarray,
             **kwargs
     ) -> Dict[str, Any]:
-
+        zeta = 2 #按照论文中，是一个大于\epsilon的数
+        A_min = 0.01 #由于transition model是stochastic，所以可以加入一个阈值，减少因为stochastic导致的A>0
         A = np.round(kwargs['advantage_function'],2) # 防止某些明明是0，但是因为精度，比0大一点的也被下面算进去
         #print('A:',A)
 
@@ -151,12 +152,12 @@ class ConstraintDiscrete(nn.Module):
             for j in range(self.w):
                 for k in range(self.n_actions):
                     res = self.get_next_states_and_probs([i,j],k)
-                    if A[i][j][k] > 0: 
-                        self.cost_matrix_sa[i][j][k] = 1
+                    if A[i][j][k] > A_min: 
+                        self.cost_matrix_sa[i][j][k] = A[i][j][k]*zeta
                         for m in range(len(res)):
                             next_state = res[m][0]
                             mov_probs = res[m][1]
-                            self.cost_matrix[next_state[0]][next_state[1]] = mov_probs * self.cost_matrix_sa[i][j][k]
+                            self.cost_matrix[next_state[0]][next_state[1]] += mov_probs * self.cost_matrix_sa[i][j][k]
 
         # Prepare data
         #nominal_obs = np.concatenate(nominal_obs, axis=0)
@@ -172,7 +173,7 @@ class ConstraintDiscrete(nn.Module):
                     #break
             #if is_in == False:
                 #self.cost_matrix[nominal_obs[i][0]][nominal_obs[i][1]] = 1
-        print('self.cost_matrix',self.cost_matrix)
+        print('self.cost_matrix',np.round(self.cost_matrix,2))
         bw_metrics = {"backward/test": 'True'}
         #print('self.expert_policy_matrix1',self.expert_policy())
         #input('enter0001')

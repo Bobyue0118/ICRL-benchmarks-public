@@ -182,6 +182,7 @@ def load_policy_iteration_config(config, env_configs, train_env, seed, log_file)
         "penalty_initial_value": config['iteration']['penalty_initial_value'],
         "penalty_learning_rate": config['iteration']['penalty_learning_rate'],
         "log_file": log_file,
+        "reward_states": env_configs['reward_states'],
 
     }
     pi_parameters.update({"penalty_min_value": config['iteration']['nu_min_clamp']})

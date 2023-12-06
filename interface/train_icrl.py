@@ -380,17 +380,18 @@ def train(config):
     for itr in range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:
             print("\nResetting agent", file=log_file, flush=True)
-            nominal_agent = create_nominal_agent()#learn without constraint
+            nominal_agent0 = create_nominal_agent()#learn without constraint
             nominal_agent1 = create_nominal_agent()#learn expert policy
             nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
         current_progress_remaining = 1 - float(itr) / float(config['running']['n_iters'])
 
 
 	# uniform sampling
-        num_of_us = 100
+        num_of_us = 10
         transition = env_us.uniform_sampling(num_of_us)
-        print('Uniform sampling with {} per iteration'.format(num_of_us))#
-        #input('enter')
+        #print('Uniform sampling with {} per iteration'.format(num_of_us))#
+        #print('transition', np.round(transition,2))
+        #input('transition')
 
         # Update agent
 
@@ -400,6 +401,7 @@ def train(config):
             expert_value_function_unsafe = nominal_agent0.learn(
             total_timesteps=forward_timesteps,
             cost_function=constraint_net.cost_function_zero,  # without constraint
+            transition = transition,
             #env_for_us=env_us,
             callback=[callback] + all_callbacks
         )
@@ -409,7 +411,7 @@ def train(config):
         expert_policy_unsafe = deepcopy(optimal_policy_without_constraint)#save the value instead of the function
         #print('expert policy for unsafe states:\n',np.round(expert_policy_unsafe,2))
         #input('expert policy unsafe')
-        #print('expert value function\n', np.round(expert_value_function,3))
+        #print('expert value function\n', np.round(expert_value_function_unsafe,3))
         #input('itr:0')
 
         # get expert policy for safe states, use true cost function
@@ -418,6 +420,7 @@ def train(config):
             expert_value_function = nominal_agent1.learn(
             total_timesteps=forward_timesteps,
             cost_function=ture_cost_function,  # Cost should come from cost wrapper
+            transition = transition,
             #env_for_us=env_us,
             callback=[callback] + all_callbacks
         )
@@ -440,7 +443,7 @@ def train(config):
 
 
         # get V(s), thus Q and advantage function
-        # unsafe states的V(s)直接替换就行，不能更换expert policy后再policy evaluation，否则会和unsafe情形一样了。
+        # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
         print('\n#####get advantage function#####\n')
         for unsafe_state in env_configs['unsafe_states']:
             expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
@@ -457,9 +460,9 @@ def train(config):
             forward_metrics = logger.Logger.CURRENT.name_to_value
             timesteps += nominal_agent2.num_timesteps
            
-        #print('expert value function complete\n', np.round(expert_value_function,3))
-        #print('Q value function complete\n', np.round(Q_value_function,3))
-        #print('advantage function complete\n', np.round(advantage_function,3))
+        print('expert value function complete\n', np.round(expert_value_function,3))
+        print('Q value function complete\n', np.round(Q_value_function,3))
+        print('advantage function complete\n', np.round(advantage_function,3))
         #input('itr:2')
 
 
