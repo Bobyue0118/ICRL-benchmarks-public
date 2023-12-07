@@ -137,7 +137,7 @@ class PolicyIterationLagrange(ABC):
             self.num_timesteps += 1
             # Run the policy evaluation
             self.policy_evaluation(cost_function, transition)
-            #print('self.v_m1',self.v_m)
+            #print('self.v_m1',np.round(self.v_m,2))
             #input('self.v_m1')
             # Run the policy improvement algorithm
             policy_stable = self.policy_improvement(cost_function, transition)
@@ -332,20 +332,25 @@ class PolicyIterationLagrange(ABC):
                     if not ((0<=next_state[0]<self.height) and (0<=next_state[1]<self.width)):
                         action_values.append(-np.inf)
                         continue
-                    #s_primes, rewards, dones, infos = self.step(action)
-                    s_primes = [[x+self.neighbors[action][0],y+self.neighbors[action][1]]]
-                    rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
-                    # Get cost from environment.
-                    costs = cost_function(np.array(s_primes), [action])
-                    orig_costs = costs
-                    current_penalty = self.dual.nu().item()
-                    lag_costs = self.apply_lag * current_penalty * orig_costs[0]
-                    # Get value
-                    curr_val = rewards[0] - lag_costs + self.gamma * self.v_m[s_primes[0][0], s_primes[0][1]]
-                    # curr_val = self.v_m[s_primes[0][0], s_primes[0][1]]
-                    curr_val = transition[x, y, action, s_primes[0][0], s_primes[0][1]] * curr_val
+
+                    x_coordinate = np.nonzero(transition[x, y, action])[0]
+                    y_coordinate = np.nonzero(transition[x, y, action])[1]
+                    curr_val1 = 0
+                    for i in range(len(x_coordinate)):
+                        s_primes = [[x_coordinate[i], y_coordinate[i]]]
+                        rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
+                        costs = cost_function(np.array(s_primes), [action])
+                        orig_costs = costs
+                        current_penalty = self.dual.nu().item()
+                        lag_costs = self.apply_lag * current_penalty * orig_costs[0]
+                        # Get value
+                        curr_val = rewards[0] - lag_costs + self.gamma * self.v_m[s_primes[0][0], s_primes[0][1]]
+                        curr_val1 += transition[x, y, action, s_primes[0][0], s_primes[0][1]] * curr_val
+                        #print('ii, transition', i, transition[x, y, action, s_primes[0][0], s_primes[0][1]])
+                        #input('ii')
+
                     #curr_val = 1 * curr_val
-                    action_values.append(curr_val)
+                    action_values.append(curr_val1)
                 #print('action_values',x,y,action_values)
                 #input('')
                 best_actions = np.argwhere(action_values == np.amax(action_values)).flatten().tolist()
@@ -385,27 +390,23 @@ class PolicyIterationLagrange(ABC):
             if not ((0<=next_state[0]<self.height) and (0<=next_state[1]<self.width)):
                 continue
 
-            s_primes = [[x+self.neighbors[action][0],y+self.neighbors[action][1]]]
-            rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
-            #print('rewards,s_primes',rewards, s_primes)
-            #input('rewards')
-            # Get cost from environment.
-            costs = cost_function(np.array(s_primes), [action]) #refer to constraint_net_discrete.py
-            orig_costs = costs
-            #print(orig_costs[0])
-            #input('orig_costs[0]')
-            gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
-            current_penalty = self.dual.nu().item()
-            lag_costs = self.apply_lag * current_penalty * orig_costs[0]
-            total += self.pi[x, y, action] * transition[x, y, action, s_primes[0][0], s_primes[0][1]]*(rewards[0] - lag_costs + gamma_values)
-            #total += self.pi[x, y, action] * 1*(rewards[0] - lag_costs + gamma_values)
-        #if x==3 and y in [0,1,2,3,4] and self.indicator>0:
-            #print('self.apply_lag * current_penalty',self.apply_lag, current_penalty, orig_costs[0])
-            #self.indicator -= 1
-            #input('check')
+            x_coordinate = np.nonzero(transition[x, y, action])[0]
+            y_coordinate = np.nonzero(transition[x, y, action])[1]
+            for i in range(len(x_coordinate)):
+                s_primes = [[x_coordinate[i], y_coordinate[i]]]
+                rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
+                costs = cost_function(np.array(s_primes), [action])
+                orig_costs = costs
+                gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
+                current_penalty = self.dual.nu().item()
+                lag_costs = self.apply_lag * current_penalty * orig_costs[0]
+                total += self.pi[x, y, action] * transition[x, y, action, s_primes[0][0], s_primes[0][1]]*(rewards[0] - lag_costs + gamma_values)
+                #print('i, transition', x, y, action, s_primes, i, rewards[0], self.pi[x, y, action], lag_costs, transition[x, y, action, s_primes[0][0], s_primes[0][1]])
+                #input('i')
         #print('self.pi',x,y,self.pi)
         #print('cost_function',const_function)
         #input('Enter...')
+
         self.v_m[x, y] = total
 
     def bellman_update_partial(self, old_v, x, y, cost_function, transition):
