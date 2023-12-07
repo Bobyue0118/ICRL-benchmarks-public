@@ -387,7 +387,7 @@ def train(config):
 
 
 	# uniform sampling
-        num_of_us = 10
+        num_of_us = 100
         transition = env_us.uniform_sampling(num_of_us)
         #print('Uniform sampling with {} per iteration'.format(num_of_us))#
         #print('transition', np.round(transition,2))
@@ -445,10 +445,10 @@ def train(config):
         # get V(s), thus Q and advantage function
         # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
         print('\n#####get advantage function#####\n')
-        for unsafe_state in env_configs['unsafe_states']:
-            expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
+        #for unsafe_state in env_configs['unsafe_states']:
+            #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
         with ProgressBarManager(forward_timesteps) as callback:
-            expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
+            expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn_from_partial(
             total_timesteps=forward_timesteps,
             cost_function=ture_cost_function,  # Cost should come from cost wrapper
             expert_policy = expert_policy,

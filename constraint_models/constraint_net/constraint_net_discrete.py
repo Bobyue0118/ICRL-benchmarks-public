@@ -46,6 +46,7 @@ class ConstraintDiscrete(nn.Module):
 
     def _build(self) -> None:
         self.cost_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
+        self.cost_matrix_weight = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.cost_matrix_sa = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
         self.cost_matrix_zero = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.expert_policy_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
@@ -147,6 +148,9 @@ class ConstraintDiscrete(nn.Module):
         A = np.round(kwargs['advantage_function'],2) # 防止某些明明是0，但是因为精度，比0大一点的也被下面算进去
         #print('A:',A)
 
+        self.cost_matrix_sa = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
+        #self.cost_matrix_weight = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
+        
         # from c(s,a) to c(s)
         for i in range(self.h):
             for j in range(self.w):
@@ -175,8 +179,7 @@ class ConstraintDiscrete(nn.Module):
                 #self.cost_matrix[nominal_obs[i][0]][nominal_obs[i][1]] = 1
         print('self.cost_matrix',np.round(self.cost_matrix,2))
         bw_metrics = {"backward/test": 'True'}
-        #print('self.expert_policy_matrix1',self.expert_policy())
-        #input('enter0001')
+
         return bw_metrics
 
     def save(self, save_path):
