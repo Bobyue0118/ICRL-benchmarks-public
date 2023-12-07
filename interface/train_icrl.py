@@ -380,6 +380,7 @@ def train(config):
     for itr in range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:
             print("\nResetting agent", file=log_file, flush=True)
+            nominal_agent = create_nominal_agent()#learn with identified constraint
             nominal_agent0 = create_nominal_agent()#learn without constraint
             nominal_agent1 = create_nominal_agent()#learn expert policy
             nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
@@ -465,6 +466,19 @@ def train(config):
         print('advantage function complete\n', np.round(advantage_function,3))
         #input('itr:2')
 
+        # learn identified constraint
+        if itr >= 1:
+            print('\n#####learn identified constraint#####\n')
+            with ProgressBarManager(forward_timesteps) as callback:
+                nominal_agent.learn(
+                total_timesteps=forward_timesteps,
+                cost_function=constraint_net.cost_function,  # Cost should come from cost wrapper
+                transition=transition,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent2.num_timesteps
+            #input('itr:3')
 
 
         # monitor the memory and running time
