@@ -7,3 +7,6 @@ uniform sampling在sample_from_agent()中，self.env.reset()设置初始位置�
 2. action = random.choice(n_actions) #us-code, policy_iteration_lag的predict中
 3. cnt = 0 #us-code, cns_sampler.py, single_thread_sample_with_policy(self)
 4. 在uniform sampling时，需要将env_utils.py中的class MujocoExternalSignalWrapper(gym.Wrapper):def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, Dict[Any, Any]]: obs, reward, done, info = self.env.step_from_us(action)，修改step为step_from_us
+
+uniform sampling: python train_icrl.py ../config/mujoco_WGW-discrete-v0/train_ICRL_discrete_WGW-v0-setting1.yaml
+greedy ICRL: python train_icrl_greedy.py ../config/mujoco_WGW-discrete-v0/train_ICRL_discrete_WGW-v0-setting1.yaml

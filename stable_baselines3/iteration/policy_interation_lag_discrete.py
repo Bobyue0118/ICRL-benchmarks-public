@@ -120,6 +120,10 @@ class PolicyIterationLagrange(ABC):
     def get_policy(self):
         return self.pi
 
+    # get current v_m
+    def get_v_m(self):
+        return self.v_m
+
     def learn(self,
               #env_for_us,
               total_timesteps: int,
@@ -244,7 +248,7 @@ class PolicyIterationLagrange(ABC):
                     #print('orig_costs2',orig_costs)
             else:
                 costs = cost_function(obs, actions)
-                orig_costs = costs # (np.exp(costs)-1)
+                orig_costs = (np.exp(costs)-1) #costs # (np.exp(costs)-1)
             self.admissible_actions = infos[0]['admissible_actions']
             costs_game.append(orig_costs)
             obs = obs_primes
@@ -354,7 +358,7 @@ class PolicyIterationLagrange(ABC):
                         s_primes = [[x_coordinate[i], y_coordinate[i]]]
                         rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
                         costs = cost_function(np.array(s_primes), [action])
-                        orig_costs = costs # (np.exp(costs)-1)
+                        orig_costs = (np.exp(costs)-1) #costs # (np.exp(costs)-1)
                         current_penalty = self.dual.nu().item()
                         lag_costs = self.apply_lag * current_penalty * orig_costs[0]
                         # Get value
@@ -441,7 +445,7 @@ class PolicyIterationLagrange(ABC):
                 s_primes = [[x_coordinate[i], y_coordinate[i]]]
                 rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
                 costs = cost_function(np.array(s_primes), [action])
-                orig_costs = costs # (np.exp(costs)-1)
+                orig_costs = (np.exp(costs)-1) # costs # (np.exp(costs)-1)
                 gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
                 current_penalty = self.dual.nu().item()
                 lag_costs = self.apply_lag * current_penalty * orig_costs[0]
@@ -472,7 +476,7 @@ class PolicyIterationLagrange(ABC):
                 s_primes = [[x_coordinate[i], y_coordinate[i]]]
                 rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
                 costs = cost_function(np.array(s_primes), [action])
-                orig_costs = costs # (np.exp(costs)-1)
+                orig_costs = (np.exp(costs)-1) # costs # (np.exp(costs)-1)
                 gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
                 if [x,y] not in unsafe_states:
                     current_penalty = self.dual.nu().item()

@@ -144,7 +144,7 @@ class ConstraintDiscrete(nn.Module):
             **kwargs
     ) -> Dict[str, Any]:
         zeta = 1 #按照论文中，是一个大于\epsilon的数
-        A_min = 0.01 #由于transition model是stochastic，所以可以加入一个阈值，减少因为stochastic导致的A>0
+        A_min = 0 #由于transition model是stochastic，所以可以加入一个阈值，减少因为stochastic导致的A>0
         A = np.round(kwargs['advantage_function'],2) # 防止某些明明是0，但是因为精度，比0大一点的也被下面算进去
         #print('A:',A)
         min_A = np.inf 
@@ -167,6 +167,8 @@ class ConstraintDiscrete(nn.Module):
                             mov_probs = res[m][1]
                             self.cost_matrix[next_state[0]][next_state[1]] += mov_probs * self.cost_matrix_sa[i][j][k]
         self.cost_matrix /= min_A # 除以大于零的最小的A
+        self.cost_matrix[self.cost_matrix<0.04*np.amax(self.cost_matrix)]=0 # 有些因为概率导致的cost略大于0可以删去
+
         # Prepare data
         #nominal_obs = np.concatenate(nominal_obs, axis=0)
         #expert_obs = np.concatenate(self.expert_obs, axis=0)

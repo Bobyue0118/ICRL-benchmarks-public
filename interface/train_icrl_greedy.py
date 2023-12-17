@@ -348,7 +348,10 @@ def train(config):
         warmup_timesteps = config['iteration']['warmup_timesteps']
     else:
         raise ValueError("Unknown model {0}.".format(config['group']))
-
+    nominal_agent = create_nominal_agent()
+    nominal_agent0 = create_nominal_agent()#learn without constraint
+    nominal_agent1 = create_nominal_agent()#learn expert policy
+    nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
     
     # Callbacks
     all_callbacks = []
@@ -378,7 +381,6 @@ def train(config):
     vareps_itr = 1/(1-config['env']['reward_gamma'])
     vareps_itr_list = []
     itra = 0
-    nominal_agent = create_nominal_agent()
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
@@ -392,7 +394,7 @@ def train(config):
         #print('transition', np.round(transition,2))
         #input('transition')
 
-        if itra > 1: # config['running']['n_iters']:
+        if itra > config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -469,14 +471,14 @@ def train(config):
         #print('advantage function complete\n', np.round(advantage_function,3))
         #print('sample_count', sample_count)
         #input('itr:2')
-        ci = get_hoeffding_ci(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
+        ci = get_hoeffding_ci(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],      sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=-np.inf
         vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
         print('itra, vareps_itr', itra, vareps_itr, np.max(sample_count))
         np.set_printoptions(suppress=True)
         vareps_itr_list.append(np.round(vareps_itr,2))
     print(vareps_itr_list)
-    #input('itra, vareps_itr')
+    input('itra, vareps_itr')
 
     for itr in range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:
@@ -496,8 +498,7 @@ def train(config):
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
                 timesteps += nominal_agent2.num_timesteps
-        print("v_m", np.round(nominal_agent.get_v_m(),3))
-        #input('itr:3')
+            #input('itr:3')
 
 
         # monitor the memory and running time
