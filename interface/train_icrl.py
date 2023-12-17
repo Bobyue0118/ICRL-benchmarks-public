@@ -442,7 +442,7 @@ def train(config):
         #print('expert policy for complete\n', np.round(expert_policy,2))
         #input('expert policy complete')
         print('expert value function safe\n', np.round(expert_value_function,3))
-        input('itr:1')
+        #input('itr:1')
 
 
         # get V(s), thus Q and advantage function
@@ -498,7 +498,7 @@ def train(config):
                 timesteps += nominal_agent2.num_timesteps
         print("v_m", np.round(nominal_agent.get_v_m(),3))
         #print("policy", np.round(nominal_agent.get_policy(),3))
-        input('itr:3')
+        #input('itr:3')
 
 
         # monitor the memory and running time
