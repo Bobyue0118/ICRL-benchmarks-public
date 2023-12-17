@@ -28,7 +28,7 @@ from stable_baselines3.common import logger
 from stable_baselines3.common.vec_env import sync_envs_normalization, VecNormalize
 from utils.data_utils import read_args, load_config, ProgressBarManager, del_and_make, load_expert_data, \
     get_input_features_dim, process_memory, print_resource
-from utils.model_utils import load_ppo_config, load_policy_iteration_config
+from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci
 
 import warnings  # disable warnings
 
@@ -309,7 +309,7 @@ def train(config):
     # Pass updated cost_function to cost wrapper (train_env, eval_env, sampling_env)
     train_env.set_cost_function(constraint_net.cost_function)
     sampling_env.set_cost_function(constraint_net.cost_function)
-    print('constraint_net.cost_function', constraint_net.cost_function)
+
     # visualize the cost function for gridworld
     if 'WGW' in config['env']['train_env_id']:
         ture_cost_function = get_true_cost_function(env_id=config['env']['train_env_id'], env_configs=env_configs)
@@ -377,25 +377,29 @@ def train(config):
     start_time = time.time()
     print("\nBeginning training", file=log_file, flush=True)
     best_true_reward, best_true_cost, best_forward_kl, best_reverse_kl = -np.inf, np.inf, np.inf, np.inf
-    for itr in range(config['running']['n_iters']):
-        if reset_policy and itr % reset_every == 0:
-            print("\nResetting agent", file=log_file, flush=True)
-            nominal_agent = create_nominal_agent()#learn with identified constraint
-            nominal_agent0 = create_nominal_agent()#learn without constraint
-            nominal_agent1 = create_nominal_agent()#learn expert policy
-            nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
-        current_progress_remaining = 1 - float(itr) / float(config['running']['n_iters'])
+    vareps = 0.1 # target accuracy
+    vareps_itr = 1/(1-config['env']['reward_gamma'])
+    vareps_itr_list = []
+    itra = 0
+    nominal_agent0 = create_nominal_agent()#learn without constraint
+    nominal_agent1 = create_nominal_agent()#learn expert policy
+    nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
+    num_of_us = 200 # number of uniform sampling per iteration
 
+    while vareps_itr > vareps:
 
 	# uniform sampling
-        num_of_us = 200
-        transition = env_us.uniform_sampling(num_of_us)
+        transition, sample_count = env_us.uniform_sampling(num_of_us)
         #print('Uniform sampling with {} per iteration'.format(num_of_us))#
         #print('transition', np.round(transition,2))
         #input('transition')
 
-        # Update agent
+        if itra > config['running']['n_iters']:
+            break
+        else:
+            itra += 1
 
+        # Update agent
         # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
         print('\n#####get expert policy for unsafe states#####\n')
         with ProgressBarManager(forward_timesteps) as callback:
@@ -434,9 +438,9 @@ def train(config):
         #print('expert policy for safe states\n', np.round(expert_policy,2))
         #input('expert policy safe')
         # for those unsafe states, the expert policy is defined as the optimal policy without constraint
-        #for unsafe_state in env_configs['unsafe_states']:
+        for unsafe_state in env_configs['unsafe_states']:
             #print('unsafe_state', unsafe_state)
-            #expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
+            expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
         #print('expert policy for complete\n', np.round(expert_policy,2))
         #input('expert policy complete')
         #print('expert value function safe\n', np.round(expert_value_function,3))
@@ -446,15 +450,16 @@ def train(config):
         # get V(s), thus Q and advantage function
         # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
         print('\n#####get advantage function#####\n')
-        for unsafe_state in env_configs['unsafe_states']:
-            expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
+        #for unsafe_state in env_configs['unsafe_states']:
+            #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
         with ProgressBarManager(forward_timesteps) as callback:
-            expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn_from_partial(
+            expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
             total_timesteps=forward_timesteps,
             cost_function=ture_cost_function,  # Cost should come from cost wrapper
             expert_policy = expert_policy,
             v_m = expert_value_function,
             #env_for_us=env_us,
+            unsafe_states = env_configs['unsafe_states'],
             transition=transition,
             callback=[callback] + all_callbacks
         )
@@ -462,10 +467,25 @@ def train(config):
             timesteps += nominal_agent2.num_timesteps
            
         print('expert value function complete\n', np.round(expert_value_function,3))
-        print('Q value function complete\n', np.round(Q_value_function,3))
-        print('advantage function complete\n', np.round(advantage_function,3))
+        #print('Q value function complete\n', np.round(Q_value_function,3))
+        #print('advantage function complete\n', np.round(advantage_function,3))
+        #print('sample_count', sample_count)
         #input('itr:2')
+        ci = get_hoeffding_ci(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'], sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], epsilon=config['iteration']['epsilon'], delta=0.1)
+        ci[np.where(np.isnan(ci))]=-np.inf
+        vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
+        print('itra, vareps_itr', itra, vareps_itr, np.max(sample_count))
+        np.set_printoptions(suppress=True)
+        vareps_itr_list.append(np.round(vareps_itr,2))
+    print(vareps_itr_list)
+    input('itra, vareps_itr')
 
+    for itr in range(config['running']['n_iters']):
+        if reset_policy and itr % reset_every == 0:
+            print("\nResetting agent", file=log_file, flush=True)
+            nominal_agent = create_nominal_agent()#learn with identified constraint
+        current_progress_remaining = 1 - float(itr) / float(config['running']['n_iters'])
+        
         # learn identified constraint
         if itr >= 1:
             print('\n#####learn identified constraint#####\n')

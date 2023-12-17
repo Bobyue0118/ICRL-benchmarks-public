@@ -7,6 +7,7 @@ from gym.envs.mujoco import mujoco_env
 
 from utils.data_utils import softmax
 from utils.plot_utils import Plot2D
+from copy import copy, deepcopy
 
 
 class WallGridworld(gym.Env):
@@ -269,7 +270,15 @@ class WallGridworld(gym.Env):
                         for n in range(self.w):
                             self.uniform_sampling_matrix_normalized[i][j][k][m][n] = self.uniform_sampling_matrix[i][j][k][m][n]/max(total_num,1)
             
-        return self.uniform_sampling_matrix_normalized
+        # assign np.nan to (state,action) not visited
+        sampling_matrix_complete = np.sum(np.sum(copy(self.uniform_sampling_matrix),4),3)
+        for i in range(self.h):
+            for j in range(self.w):
+                for k in range(self.n_actions):
+                    if k not in self.get_actions([i,j]) or [i,j] in self.terminals:
+                        sampling_matrix_complete[i,j,k] = np.nan
+       
+        return self.uniform_sampling_matrix_normalized, sampling_matrix_complete
 
     def step(self, action):
         """

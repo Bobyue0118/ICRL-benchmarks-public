@@ -19,7 +19,7 @@ env:
   visualize_info_ranges: [ [ 0, 6 ], [ 0, 6 ]  ]  #  [ [ 0, 7 ], [ 0, 7 ]  ]
 
 running:
-  n_iters: 30 #20
+  n_iters: 200 #20
   n_eval_episodes: 10
   save_every: 1
   expert_rollouts: 20
@@ -41,6 +41,8 @@ iteration:
   reset_every: null
   nu_max_clamp: 1
   nu_min_clamp: null
+  zeta_max: 1
+  epsilon: 0
 
 CN:
 #  cn_learning_rate: 0.003

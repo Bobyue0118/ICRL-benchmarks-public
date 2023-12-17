@@ -147,7 +147,7 @@ class ConstraintDiscrete(nn.Module):
         A_min = 0.01 #由于transition model是stochastic，所以可以加入一个阈值，减少因为stochastic导致的A>0
         A = np.round(kwargs['advantage_function'],2) # 防止某些明明是0，但是因为精度，比0大一点的也被下面算进去
         #print('A:',A)
-        
+        min_A = np.inf 
         # 防止有误，重新更零。但随着transition model的精确，以及V(s)的精确，最终一定会精确的
         self.cost_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.cost_matrix_sa = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
@@ -160,11 +160,13 @@ class ConstraintDiscrete(nn.Module):
                     res = self.get_next_states_and_probs([i,j],k)
                     if A[i][j][k] > A_min: 
                         self.cost_matrix_sa[i][j][k] = A[i][j][k]*zeta
+                        if A[i][j][k] < min_A:
+                            min_A = A[i][j][k]
                         for m in range(len(res)):
                             next_state = res[m][0]
                             mov_probs = res[m][1]
                             self.cost_matrix[next_state[0]][next_state[1]] += mov_probs * self.cost_matrix_sa[i][j][k]
-
+        self.cost_matrix /= min_A # 除以大于零的最小的A
         # Prepare data
         #nominal_obs = np.concatenate(nominal_obs, axis=0)
         #expert_obs = np.concatenate(self.expert_obs, axis=0)
@@ -179,7 +181,8 @@ class ConstraintDiscrete(nn.Module):
                     #break
             #if is_in == False:
                 #self.cost_matrix[nominal_obs[i][0]][nominal_obs[i][1]] = 1
-        print('self.cost_matrix',np.round(self.cost_matrix,2))
+        np.set_printoptions(suppress=True)
+        print('self.cost_matrix\n',np.round(self.cost_matrix,2))
         bw_metrics = {"backward/test": 'True'}
 
         return bw_metrics

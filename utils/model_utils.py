@@ -243,3 +243,20 @@ def load_ppo_config(config, train_env, seed, log_file):
         raise ValueError("Unknown Group {0}".format(config['group']))
 
     return ppo_parameters
+
+def get_hoeffding_ci(height, width, n_actions, sample_count, v_m, zeta_max, gamma, epsilon, delta=0.01):
+    n_states = height*width
+    sample_count = np.maximum(sample_count, 1)
+    #print('sample_count1',sample_count)
+    #input('in')
+    ci = np.sqrt(
+        np.log(24 * n_states * n_actions * np.square(sample_count) / delta)
+        / sample_count
+    )
+    #print('ci',np.round(ci,1))
+    #input('in2')
+    v_m = np.repeat(v_m, n_actions).reshape(height, width, n_actions)
+    ci *= gamma * (2*zeta_max/(1-gamma) * v_m + epsilon)
+    #print('ci',np.round(ci,1))
+    #input('in3')
+    return ci
