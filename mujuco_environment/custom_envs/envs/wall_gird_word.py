@@ -74,6 +74,8 @@ class WallGridworld(gym.Env):
         self.visualization_path = visualization_path
         self.uniform_sampling_matrix = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
         self.uniform_sampling_matrix_normalized = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
+        self.greedy_sampling_matrix = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
+        self.greedy_sampling_matrix_normalized = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
 
     def get_states(self):
         """

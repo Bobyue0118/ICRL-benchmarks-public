@@ -168,7 +168,7 @@ class ConstraintDiscrete(nn.Module):
                             self.cost_matrix[next_state[0]][next_state[1]] += mov_probs * self.cost_matrix_sa[i][j][k]
         self.cost_matrix /= min_A # 除以大于零的最小的A
         self.cost_matrix[self.cost_matrix<0.04*np.amax(self.cost_matrix)]=0 # 有些因为概率导致的cost略大于0可以删去
-
+        #self.cost_matrix[self.cost_matrix>=0.04*np.amax(self.cost_matrix)]=1
         # Prepare data
         #nominal_obs = np.concatenate(nominal_obs, axis=0)
         #expert_obs = np.concatenate(self.expert_obs, axis=0)

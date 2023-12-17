@@ -24,7 +24,8 @@ class PolicyIterationLagrange(ABC):
                  reward_states: list,
                  height: int,  # table length
                  width: int,  # table width
-                 terminal_states: int,
+                 start_states: list,
+                 terminal_states: list,
                  stopping_threshold: float,
                  seed: int,
                  gamma: float = 0.99,
@@ -44,6 +45,7 @@ class PolicyIterationLagrange(ABC):
         self.log_file = log_file
         self.max_iter = max_iter
         self.n_actions = n_actions
+        self.start_states = start_states
         self.terminal_states = terminal_states
         self.v0 = v0
         self.seed = seed
@@ -57,7 +59,7 @@ class PolicyIterationLagrange(ABC):
         self.apply_lag = apply_lag
         self.budget = budget
         self.num_timesteps = 0
-        self.admissible_actions = None
+        
         if self.n_actions == 9:
             self.neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1), (0, 0)]  # effect of each movement
             self.actions = [0, 1, 2, 3, 4, 5, 6, 7, 8]
@@ -83,6 +85,11 @@ class PolicyIterationLagrange(ABC):
         self.reward_mat = np.zeros((self.height, self.width))
         for reward_pos in self.reward_states:
             self.reward_mat[reward_pos[0], reward_pos[1]] = 1
+        if len(self.start_states)==1:
+            self.admissible_actions = self.get_actions(self.start_states[0])
+        else:
+            self.admissible_actions = None
+
         #self.env_for_us = None
         
 
@@ -115,6 +122,24 @@ class PolicyIterationLagrange(ABC):
         #print('pi',pi) 
         #input('pi')
         return pi
+
+    def get_actions(self, state):
+        """
+        Returns list of actions that can be taken from the given state.
+        """
+        if self.reward_mat[state[0]][state[1]] in \
+                [-np.inf, float('inf'), np.nan, float('nan')]:
+            return [4]
+        actions = []
+        for i in range(len(self.actions)):#不用-1
+            inc = self.neighbors[i]
+            a = self.actions[i]
+            nei_s = (state[0] + inc[0], state[1] + inc[1])
+            if 0 <= nei_s[0] < self.height and 0 <= nei_s[1] < self.width and \
+                    self.reward_mat[nei_s[0]][nei_s[1]] not in \
+                    [-np.inf, float('inf'), np.nan, float('nan')]:
+                actions.append(a)
+        return actions
   
     # get current policy
     def get_policy(self):
@@ -248,7 +273,7 @@ class PolicyIterationLagrange(ABC):
                     #print('orig_costs2',orig_costs)
             else:
                 costs = cost_function(obs, actions)
-                orig_costs = (np.exp(costs)-1) #costs # (np.exp(costs)-1)
+                orig_costs = costs #costs # (np.exp(costs)-1)
             self.admissible_actions = infos[0]['admissible_actions']
             costs_game.append(orig_costs)
             obs = obs_primes
@@ -358,7 +383,7 @@ class PolicyIterationLagrange(ABC):
                         s_primes = [[x_coordinate[i], y_coordinate[i]]]
                         rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
                         costs = cost_function(np.array(s_primes), [action])
-                        orig_costs = (np.exp(costs)-1) #costs # (np.exp(costs)-1)
+                        orig_costs = costs #costs # (np.exp(costs)-1)
                         current_penalty = self.dual.nu().item()
                         lag_costs = self.apply_lag * current_penalty * orig_costs[0]
                         # Get value
@@ -445,7 +470,7 @@ class PolicyIterationLagrange(ABC):
                 s_primes = [[x_coordinate[i], y_coordinate[i]]]
                 rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
                 costs = cost_function(np.array(s_primes), [action])
-                orig_costs = (np.exp(costs)-1) # costs # (np.exp(costs)-1)
+                orig_costs = costs # costs # (np.exp(costs)-1)
                 gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
                 current_penalty = self.dual.nu().item()
                 lag_costs = self.apply_lag * current_penalty * orig_costs[0]
@@ -476,7 +501,7 @@ class PolicyIterationLagrange(ABC):
                 s_primes = [[x_coordinate[i], y_coordinate[i]]]
                 rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
                 costs = cost_function(np.array(s_primes), [action])
-                orig_costs = (np.exp(costs)-1) # costs # (np.exp(costs)-1)
+                orig_costs = costs # costs # (np.exp(costs)-1)
                 gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
                 if [x,y] not in unsafe_states:
                     current_penalty = self.dual.nu().item()
@@ -494,6 +519,8 @@ class PolicyIterationLagrange(ABC):
 
 
     def predict(self, obs, state, deterministic=None):
+        if obs[0][0] == self.start_states[0][0] and obs[0][1] == self.start_states[0][1]:
+            self.admissible_actions = self.get_actions(obs[0])
         policy_prob = copy.copy(self.pi[int(obs[0][0]), int(obs[0][1])])
         if self.admissible_actions is not None:
             for c_a in range(self.n_actions):
@@ -503,7 +530,8 @@ class PolicyIterationLagrange(ABC):
         #input('Enter')
         best_actions = np.argwhere(policy_prob == np.amax(policy_prob)).flatten().tolist()
         action = random.choice(best_actions)
-        #print('action',action)
+        #print('action',policy_prob,obs,self.admissible_actions,action,best_actions)
+        #input('action')
         return np.asarray([action]), state
 
     def predict_random(self, obs, state, deterministic=None):

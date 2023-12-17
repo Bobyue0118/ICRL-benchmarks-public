@@ -178,6 +178,7 @@ def load_policy_iteration_config(config, env_configs, train_env, seed, log_file)
         "n_actions": env_configs['n_actions'],
         "height": env_configs['map_height'],
         "width": env_configs['map_width'],
+        "start_states": env_configs['start_states'],
         "terminal_states": env_configs['terminal_states'],
         "penalty_initial_value": config['iteration']['penalty_initial_value'],
         "penalty_learning_rate": config['iteration']['penalty_learning_rate'],
