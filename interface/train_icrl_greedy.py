@@ -390,14 +390,15 @@ def train(config):
         _, sample_count = env_us.uniform_sampling(num_of_us)
         transition = env_us.get_original_transition()
         #print('Uniform sampling with {} per iteration'.format(num_of_us))#
-        #print('transition', np.round(transition,2))
-        #input('transition')
+        print('transition', np.round(transition,2))
+        input('transition')
 
         if itra > 1: # config['running']['n_iters']:
             break
         else:
             itra += 1
 
+        # Update agent
         # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
         print('\n#####get expert policy for unsafe states#####\n')
         with ProgressBarManager(forward_timesteps) as callback:
