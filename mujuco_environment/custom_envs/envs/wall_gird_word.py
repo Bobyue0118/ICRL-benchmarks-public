@@ -76,6 +76,7 @@ class WallGridworld(gym.Env):
         self.uniform_sampling_matrix_normalized = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
         self.greedy_sampling_matrix = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
         self.greedy_sampling_matrix_normalized = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
+        self.orig_transition = self.get_original_transition()
 
     def get_states(self):
         """
@@ -112,6 +113,15 @@ class WallGridworld(gym.Env):
             if state[0] == terminal_state[0] and state[1] == terminal_state[1]:
                 return True
         return False
+
+    def get_original_transition(self):
+        self.orig_transition = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
+        for i in range(self.h):
+            for j in range(self.w):
+                for k in self.get_actions([i,j]):
+                    for m in self.get_next_states_and_probs([i,j],k):
+                        self.orig_transition[i,j,k,m[0][0],m[0][1]] = m[1]
+        return self.orig_transition
 
     def get_next_states_and_probs(self, state, action):
         """
@@ -245,9 +255,25 @@ class WallGridworld(gym.Env):
             self.steps = 0
             return self.state
 
+    # greedy sampling for ICRL
+    def greedy_sampling(self, n_max):
+        print('greedy sampling:', n_max)
+
+        #if n_max != 0:
+        # assign np.nan to (state,action) not visited
+        sampling_count = np.sum(np.sum(copy(self.greedy_sampling_matrix),4),3)
+        for i in range(self.h):
+            for j in range(self.w):
+                for k in range(self.n_actions):
+                    if k not in self.get_actions([i,j]) or [i,j] in self.terminals:
+                        sampling_count[i,j,k] = np.nan
+
+        return self.greedy_sampling_matrix_normalized, sampling_count
+
+    # uniform sampling for ICRL
     def uniform_sampling(self, n_max):
         #cnt = 0
-        print('n_max',n_max)
+        print('uniform sampling:',n_max)
         #if self.uniform_sampling_matrix_normalized.any() == True:
             #input('接着更新')
         # uniform sampling
@@ -273,14 +299,14 @@ class WallGridworld(gym.Env):
                             self.uniform_sampling_matrix_normalized[i][j][k][m][n] = self.uniform_sampling_matrix[i][j][k][m][n]/max(total_num,1)
             
         # assign np.nan to (state,action) not visited
-        sampling_matrix_complete = np.sum(np.sum(copy(self.uniform_sampling_matrix),4),3)
+        sampling_count = np.sum(np.sum(copy(self.uniform_sampling_matrix),4),3)
         for i in range(self.h):
             for j in range(self.w):
                 for k in range(self.n_actions):
                     if k not in self.get_actions([i,j]) or [i,j] in self.terminals:
-                        sampling_matrix_complete[i,j,k] = np.nan
+                        sampling_count[i,j,k] = np.nan
        
-        return self.uniform_sampling_matrix_normalized, sampling_matrix_complete
+        return self.uniform_sampling_matrix_normalized, sampling_count
 
     def step(self, action):
         """

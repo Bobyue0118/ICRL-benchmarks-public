@@ -387,10 +387,11 @@ def train(config):
     while vareps_itr > vareps:
 
 	# uniform sampling
-        transition, sample_count = env_us.uniform_sampling(num_of_us)
+        _, sample_count = env_us.uniform_sampling(num_of_us)
+        transition = env_us.get_original_transition()
         #print('Uniform sampling with {} per iteration'.format(num_of_us))#
-        #print('transition', np.round(transition,2))
-        #input('transition')
+        print('transition', np.round(transition,2))
+        input('transition')
 
         if itra > 1: # config['running']['n_iters']:
             break
