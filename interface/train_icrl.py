@@ -28,7 +28,7 @@ from stable_baselines3.common import logger
 from stable_baselines3.common.vec_env import sync_envs_normalization, VecNormalize
 from utils.data_utils import read_args, load_config, ProgressBarManager, del_and_make, load_expert_data, \
     get_input_features_dim, process_memory, print_resource
-from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci
+from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_greedy
 
 import warnings  # disable warnings
 
@@ -387,7 +387,7 @@ def train(config):
     while vareps_itr > vareps:
 
 	# uniform sampling
-        _, sample_count = env_us.uniform_sampling(num_of_us)
+        estimated_transition, sample_count = env_us.uniform_sampling(num_of_us)
         transition = env_us.get_original_transition()
         #print('Uniform sampling with {} per iteration'.format(num_of_us))#
         #print('transition', np.round(transition,2))
@@ -398,51 +398,52 @@ def train(config):
         else:
             itra += 1
 
-        # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
-        print('\n#####get expert policy for unsafe states#####\n')
-        with ProgressBarManager(forward_timesteps) as callback:
-            expert_value_function_unsafe = nominal_agent0.learn(
-            total_timesteps=forward_timesteps,
-            cost_function=constraint_net.cost_function_zero,  # without constraint
-            transition = transition,
-            #env_for_us=env_us,
-            callback=[callback] + all_callbacks
-        )
-            forward_metrics = logger.Logger.CURRENT.name_to_value
-            timesteps += nominal_agent0.num_timesteps
-        optimal_policy_without_constraint = nominal_agent0.get_policy()
-        expert_policy_unsafe = deepcopy(optimal_policy_without_constraint)#save the value instead of the function
-        #print('expert policy for unsafe states:\n',np.round(expert_policy_unsafe,2))
-        #input('expert policy unsafe')
-        #print('expert value function\n', np.round(expert_value_function_unsafe,3))
-        #input('itr:0')
+        if itra == 1:
+            # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
+            print('\n#####get expert policy for unsafe states#####\n')
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function_unsafe = nominal_agent0.learn(
+                total_timesteps=forward_timesteps,
+                cost_function=constraint_net.cost_function_zero,  # without constraint
+                transition = transition,
+                #env_for_us=env_us,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent0.num_timesteps
+            optimal_policy_without_constraint = nominal_agent0.get_policy()
+            expert_policy_unsafe = deepcopy(optimal_policy_without_constraint)#save the value instead of the function
+            #print('expert policy for unsafe states:\n',np.round(expert_policy_unsafe,2))
+            #input('expert policy unsafe')
+            #print('expert value function\n', np.round(expert_value_function_unsafe,3))
+            #input('itr:0')
 
-        # get expert policy for safe states, use true cost function
-        print('\n#####get expert policy for safe states#####\n')
-        with ProgressBarManager(forward_timesteps) as callback:
-            expert_value_function = nominal_agent1.learn(
-            total_timesteps=forward_timesteps,
-            cost_function=ture_cost_function,  # Cost should come from cost wrapper
-            transition = transition,
-            #env_for_us=env_us,
-            callback=[callback] + all_callbacks
-        )
-            forward_metrics = logger.Logger.CURRENT.name_to_value
-            timesteps += nominal_agent1.num_timesteps
-        optimal_policy_with_true_constraint = nominal_agent1.get_policy()
-        #print('expert policy for safe states:\n',optimal_policy_with_true_constraint)
-        #input('expert_policy_safe')
-        expert_policy = deepcopy(optimal_policy_with_true_constraint)
-        #print('expert policy for safe states\n', np.round(expert_policy,2))
-        #input('expert policy safe')
-        # for those unsafe states, the expert policy is defined as the optimal policy without constraint
-        for unsafe_state in env_configs['unsafe_states']:
-            #print('unsafe_state', unsafe_state)
-            expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
-        #print('expert policy for complete\n', np.round(expert_policy,2))
-        #input('expert policy complete')
-        print('expert value function safe\n', np.round(expert_value_function,3))
-        #input('itr:1')
+            # get expert policy for safe states, use true cost function
+            print('\n#####get expert policy for safe states#####\n')
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function = nominal_agent1.learn(
+                total_timesteps=forward_timesteps,
+                cost_function=ture_cost_function,  # Cost should come from cost wrapper
+                transition = transition,
+                #env_for_us=env_us,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent1.num_timesteps
+            optimal_policy_with_true_constraint = nominal_agent1.get_policy()
+            #print('expert policy for safe states:\n',optimal_policy_with_true_constraint)
+            #input('expert_policy_safe')
+            expert_policy = deepcopy(optimal_policy_with_true_constraint)
+            #print('expert policy for safe states\n', np.round(expert_policy,2))
+            #input('expert policy safe')
+            # for those unsafe states, the expert policy is defined as the optimal policy without constraint
+            for unsafe_state in env_configs['unsafe_states']:
+                #print('unsafe_state', unsafe_state)
+                expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
+            #print('expert policy for complete\n', np.round(expert_policy,2))
+            #input('expert policy complete')
+            print('expert value function safe\n', np.round(expert_value_function,3))
+            #input('itr:1')
 
 
         # get V(s), thus Q and advantage function
@@ -458,7 +459,7 @@ def train(config):
             v_m = expert_value_function,
             #env_for_us=env_us,
             unsafe_states = env_configs['unsafe_states'],
-            transition=transition,
+            transition=estimated_transition,
             callback=[callback] + all_callbacks
         )
             forward_metrics = logger.Logger.CURRENT.name_to_value
@@ -469,7 +470,7 @@ def train(config):
         #print('advantage function complete\n', np.round(advantage_function,3))
         #print('sample_count', sample_count)
         #input('itr:2')
-        ci = get_hoeffding_ci(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
+        ci = get_hoeffding_ci_us(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=-np.inf
         vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
         print('itra, vareps_itr', itra, vareps_itr, np.max(sample_count))

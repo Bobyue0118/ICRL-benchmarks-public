@@ -76,6 +76,7 @@ class WallGridworld(gym.Env):
         self.uniform_sampling_matrix_normalized = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
         self.greedy_sampling_matrix = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
         self.greedy_sampling_matrix_normalized = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
+        self.expert_policy_greedy = np.zeros((self.h,self.w,self.n_actions))
         self.orig_transition = self.get_original_transition()
 
     def get_states(self):
@@ -256,19 +257,48 @@ class WallGridworld(gym.Env):
             return self.state
 
     # greedy sampling for ICRL
-    def greedy_sampling(self, n_max):
+    def greedy_sampling(self, n_max, obs=[], acs=[], expert_policy=[]):
         print('greedy sampling:', n_max)
+        if n_max == 0:
+            self.greedy_sampling_matrix = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
+            sampling_count = np.sum(np.sum(copy(self.greedy_sampling_matrix),4),3)
+            for i in range(self.h):
+                for j in range(self.w):
+                    for k in range(self.n_actions):
+                        if k not in self.get_actions([i,j]) or [i,j] in self.terminals:
+                            sampling_count[i,j,k] = np.nan
+            return self.greedy_sampling_matrix_normalized, sampling_count, self.expert_policy_greedy
+        else:
+            # update greedy sampling matrix
+            for num in range(len(obs)-1):
+                self.greedy_sampling_matrix[obs[num][0]][obs[num][1]][acs[num]][obs[num+1][0]][obs[num+1][1]] += 1
 
-        #if n_max != 0:
-        # assign np.nan to (state,action) not visited
+        # normalize to probability
+        for i in range(self.h):
+            for j in range(self.w):
+                for k in range(self.n_actions):
+                    total_num = np.sum(self.greedy_sampling_matrix[i][j][k])
+                    for m in range(self.h):
+                        for n in range(self.w):
+                            self.greedy_sampling_matrix_normalized[i][j][k][m][n] = self.greedy_sampling_matrix[i][j][k][m][n]/max(total_num,1)
+        
+        # update sample count for ci
+        # assign np.nan to (state,action) never visited
         sampling_count = np.sum(np.sum(copy(self.greedy_sampling_matrix),4),3)
+        print('sampling_count', sampling_count)
+        #input('sampling_count')
         for i in range(self.h):
             for j in range(self.w):
                 for k in range(self.n_actions):
                     if k not in self.get_actions([i,j]) or [i,j] in self.terminals:
                         sampling_count[i,j,k] = np.nan
 
-        return self.greedy_sampling_matrix_normalized, sampling_count
+        # update estimated expert policy
+        obs_unique = list(set(obs))
+        for obs_num in range(len(obs_unique)):
+            self.expert_policy_greedy[obs_unique[obs_num][0]][obs_unique[obs_num][1]] = expert_policy[obs_unique[obs_num][0]][obs_unique[obs_num][1]]
+
+        return self.greedy_sampling_matrix_normalized, sampling_count, self.expert_policy_greedy
 
     # uniform sampling for ICRL
     def uniform_sampling(self, n_max):
@@ -298,7 +328,7 @@ class WallGridworld(gym.Env):
                         for n in range(self.w):
                             self.uniform_sampling_matrix_normalized[i][j][k][m][n] = self.uniform_sampling_matrix[i][j][k][m][n]/max(total_num,1)
             
-        # assign np.nan to (state,action) not visited
+        # assign np.nan to (state,action) never visited
         sampling_count = np.sum(np.sum(copy(self.uniform_sampling_matrix),4),3)
         for i in range(self.h):
             for j in range(self.w):
@@ -348,6 +378,35 @@ class WallGridworld(gym.Env):
                  'admissible_actions': admissible_actions,
                  },
                 )
+
+    def step_from_pi_expl(self, pi_expl):
+        """
+        Step the environment.
+        """
+
+        obs = []
+        acs = []
+        self.reset_with_values({'states':self.start_states[0]})
+        #print(self.state)
+        #input('self.state')
+        obs.append((self.state[0], self.state[1]))
+        while len(obs) < 500 and self.terminal(self.state) == False:            
+            action = np.random.choice(np.arange(0, self.n_actions), p = pi_expl[self.state[0]][self.state[1]])
+            action = int(action)
+            self.terminated = False
+            st_prob = self.get_next_states_and_probs(self.state, action)
+            sampled_idx = np.random.choice(np.arange(0, len(st_prob)), p=[prob for st, prob in st_prob])
+            last_state = self.state
+            next_state = st_prob[sampled_idx][0]
+            reward = self.reward_mat[next_state[0]][next_state[1]]
+            self.curr_state = next_state
+            obs.append(self.state)
+            acs.append(action)
+
+            self.steps += 1
+            admissible_actions = self.get_actions(self.curr_state)
+
+        return obs, acs
             
     def step_from_us(self, action):
         """

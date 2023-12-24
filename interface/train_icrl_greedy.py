@@ -28,7 +28,7 @@ from stable_baselines3.common import logger
 from stable_baselines3.common.vec_env import sync_envs_normalization, VecNormalize
 from utils.data_utils import read_args, load_config, ProgressBarManager, del_and_make, load_expert_data, \
     get_input_features_dim, process_memory, print_resource
-from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci
+from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_greedy, valueIteration
 
 import warnings  # disable warnings
 
@@ -173,7 +173,8 @@ def train(config):
 
     # init uniform sampling env
     env_configs_copy = copy(env_configs)
-    env_us = gym.make(id=config['env']['train_env_id'], **env_configs_copy)
+    env_greedy = gym.make(id=config['env']['train_env_id'], **env_configs_copy)
+    
 
 
     # init sampler
@@ -382,102 +383,117 @@ def train(config):
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
-    num_of_us = 200 # number of uniform sampling per iteration
+    num_of_greedy = 200 # number of uniform sampling per iteration
+    
 
     while vareps_itr > vareps:
 
-	# uniform sampling
-        _, sample_count = env_us.uniform_sampling(num_of_us)
-        transition = env_us.get_original_transition()
-        #print('Uniform sampling with {} per iteration'.format(num_of_us))#
-        print('transition', np.round(transition,2))
-        input('transition')
+	# greedy sampling, update for estimated transition and estimated expert policy
+        if itra == 0:
+            _, sample_count, _ = env_greedy.greedy_sampling(0)
+        else:
+            estimated_transition, sample_count, expert_policy_greedy = env_greedy.greedy_sampling(num_of_greedy, obs, acs, expert_policy)
+        transition = env_greedy.get_original_transition()
+        #print('Uniform sampling with {} per iteration'.format(num_of_greedy))#
+        #print('transition', np.round(transition,4))
+        #input('transition')
 
-        if itra > 1: # config['running']['n_iters']:
+        if itra > 1000: # config['running']['n_iters']:
             break
         else:
             itra += 1
 
-        # Update agent
-        # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
-        print('\n#####get expert policy for unsafe states#####\n')
-        with ProgressBarManager(forward_timesteps) as callback:
-            expert_value_function_unsafe = nominal_agent0.learn(
-            total_timesteps=forward_timesteps,
-            cost_function=constraint_net.cost_function_zero,  # without constraint
-            transition = transition,
-            #env_for_us=env_us,
-            callback=[callback] + all_callbacks
-        )
-            forward_metrics = logger.Logger.CURRENT.name_to_value
-            timesteps += nominal_agent0.num_timesteps
-        optimal_policy_without_constraint = nominal_agent0.get_policy()
-        expert_policy_unsafe = deepcopy(optimal_policy_without_constraint)#save the value instead of the function
-        #print('expert policy for unsafe states:\n',np.round(expert_policy_unsafe,2))
-        #input('expert policy unsafe')
-        #print('expert value function\n', np.round(expert_value_function_unsafe,3))
-        #input('itr:0')
+        if itra == 1:
+            # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
+            print('\n#####get expert policy for unsafe states#####\n')
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function_unsafe = nominal_agent0.learn(
+                total_timesteps=forward_timesteps,
+                cost_function=constraint_net.cost_function_zero,  # without constraint
+                transition = transition,
+                #env_for_us=env_us,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent0.num_timesteps
+            optimal_policy_without_constraint = nominal_agent0.get_policy()
+            expert_policy_unsafe = deepcopy(optimal_policy_without_constraint)#save the value instead of the function
+            #print('expert policy for unsafe states:\n',np.round(expert_policy_unsafe,2))
+            #input('expert policy unsafe')
+            #print('expert value function\n', np.round(expert_value_function_unsafe,3))
+            #input('itr:0')
 
-        # get expert policy for safe states, use true cost function
-        print('\n#####get expert policy for safe states#####\n')
-        with ProgressBarManager(forward_timesteps) as callback:
-            expert_value_function = nominal_agent1.learn(
-            total_timesteps=forward_timesteps,
-            cost_function=ture_cost_function,  # Cost should come from cost wrapper
-            transition = transition,
-            #env_for_us=env_us,
-            callback=[callback] + all_callbacks
-        )
-            forward_metrics = logger.Logger.CURRENT.name_to_value
-            timesteps += nominal_agent1.num_timesteps
-        optimal_policy_with_true_constraint = nominal_agent1.get_policy()
-        #print('expert policy for safe states:\n',optimal_policy_with_true_constraint)
-        #input('expert_policy_safe')
-        expert_policy = deepcopy(optimal_policy_with_true_constraint)
-        #print('expert policy for safe states\n', np.round(expert_policy,2))
-        #input('expert policy safe')
-        # for those unsafe states, the expert policy is defined as the optimal policy without constraint
-        for unsafe_state in env_configs['unsafe_states']:
-            #print('unsafe_state', unsafe_state)
-            expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
-        #print('expert policy for complete\n', np.round(expert_policy,2))
-        #input('expert policy complete')
-        print('expert value function safe\n', np.round(expert_value_function,3))
-        #input('itr:1')
+            # get expert policy for safe states, use true cost function
+            print('\n#####get expert policy for safe states#####\n')
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function = nominal_agent1.learn(
+                total_timesteps=forward_timesteps,
+                cost_function=ture_cost_function,  # Cost should come from cost wrapper
+                transition = transition,
+                #env_for_us=env_us,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent1.num_timesteps
+            optimal_policy_with_true_constraint = nominal_agent1.get_policy()
+            #print('expert policy for safe states:\n',optimal_policy_with_true_constraint)
+            #input('expert_policy_safe')
+            expert_policy = deepcopy(optimal_policy_with_true_constraint)
+            #print('expert policy for safe states\n', np.round(expert_policy,2))
+            #input('expert policy safe')
+            # for those unsafe states, the expert policy is defined as the optimal policy without constraint
+            for unsafe_state in env_configs['unsafe_states']:
+                #print('unsafe_state', unsafe_state)
+                expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
+            #print('expert policy for complete\n', np.round(expert_policy,2))
+            #input('expert policy complete')
+            print('expert value function safe\n', np.round(expert_value_function,3))
+            #input('itr:1')
 
-
-        # get V(s), thus Q and advantage function
-        # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
-        print('\n#####get advantage function#####\n')
-        #for unsafe_state in env_configs['unsafe_states']:
-            #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
-        with ProgressBarManager(forward_timesteps) as callback:
-            expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
-            total_timesteps=forward_timesteps,
-            cost_function=ture_cost_function,  # Cost should come from cost wrapper
-            expert_policy = expert_policy,
-            v_m = expert_value_function,
-            #env_for_us=env_us,
-            unsafe_states = env_configs['unsafe_states'],
-            transition=transition,
-            callback=[callback] + all_callbacks
-        )
-            forward_metrics = logger.Logger.CURRENT.name_to_value
-            timesteps += nominal_agent2.num_timesteps
-           
-        print('expert value function complete\n', np.round(expert_value_function,3))
-        #print('Q value function complete\n', np.round(Q_value_function,3))
-        #print('advantage function complete\n', np.round(advantage_function,3))
-        #print('sample_count', sample_count)
-        #input('itr:2')
-        ci = get_hoeffding_ci(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
+        ci = get_hoeffding_ci_greedy(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=-np.inf
+        print('ci',np.round(ci,2))
+        #input('ci')
         vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
         print('itra, vareps_itr', itra, vareps_itr, np.max(sample_count))
+        #input('vareps_itr')
         np.set_printoptions(suppress=True)
         vareps_itr_list.append(np.round(vareps_itr,2))
+
+        pi_expl = valueIteration(height=env_configs['map_height'], width=env_configs['map_width'], ci=ci, n_actions=env_configs['n_actions'], gamma=config['iteration']['gamma'], transition=transition, env=env_greedy, stopping_threshold=config['iteration']['stopping_threshold'])
+        print('exploration policy', pi_expl)
+        #input('pi_expl')
+        obs, acs = env_greedy.step_from_pi_expl(pi_expl)
+        print('obs, acs', env_greedy.step_from_pi_expl(pi_expl))
+        #input('obs, acs')
+
+    # get V(s), thus Q and advantage function
+    # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
+    print('\n#####get advantage function#####\n')
+    #for unsafe_state in env_configs['unsafe_states']:
+        #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
+    with ProgressBarManager(forward_timesteps) as callback:
+        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
+        total_timesteps=forward_timesteps,
+        cost_function=ture_cost_function,  # Cost should come from cost wrapper
+        expert_policy = expert_policy_greedy,
+        v_m = expert_value_function,
+        #env_for_us=env_greedy,
+        unsafe_states = env_configs['unsafe_states'],
+        transition=transition,
+        callback=[callback] + all_callbacks
+    )
+        forward_metrics = logger.Logger.CURRENT.name_to_value
+        timesteps += nominal_agent2.num_timesteps
+           
+    print('expert value function complete\n', np.round(expert_value_function,3))
+    #print('Q value function complete\n', np.round(Q_value_function,3))
+    #print('advantage function complete\n', np.round(advantage_function,3))
+    #print('sample_count', sample_count)
+    #input('itr:2')
+
     print(vareps_itr_list)
-    #input('itra, vareps_itr')
+    input('itra, vareps_itr')
 
     for itr in range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:
