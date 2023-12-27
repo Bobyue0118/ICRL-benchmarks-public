@@ -215,40 +215,6 @@ class PolicyIterationLagrange(ABC):
                     
         return self.v_m, Q, A
 
-    # based on partial expert policy, through policy evaluation, expert learn its value function, Q-value function, thus advantage function
-    def expert_learn_from_partial(self,
-              #env_for_us,
-              total_timesteps: int,
-              cost_function: Union[str, Callable],
-              expert_policy: np.ndarray,
-              v_m: np.ndarray, 
-              latent_info_str: Union[str, Callable] = '',
-              transition=None,
-              callback=None,):
-
-        iter = 0
-        self.pi=expert_policy
-        #self.policy_evaluation_partial(cost_function, transition)
-        #print('self.v_m', np.round(self.v_m,2))
-        #input('self.v_m1')
-        self.v_m = v_m
-        #print('self.v_m', np.round(self.v_m,2))
-        #input('self.v_m2')
-        Q = np.zeros((self.height, self.width, self.n_actions))
-        A = np.zeros((self.height, self.width, self.n_actions))
-        if transition is not None:
-            for i in range(self.height):
-                for j in range(self.width):
-                    for k in range(self.n_actions):
-                        for i1 in range(self.height):
-                            for j1 in range(self.width):
-                                if transition[i][j][k][i1][j1]!=0:
-                                    Q[i][j][k] += self.gamma*transition[i][j][k][i1][j1]*self.v_m[i1][j1]
-                        if Q[i][j][k] - self.v_m[i][j] > 0:
-                            A[i][j][k] = Q[i][j][k] - self.v_m[i][j] 
-        
-                    
-        return self.v_m, Q, A
 
     def step(self, action):
         #input('\nstep0')
@@ -339,24 +305,6 @@ class PolicyIterationLagrange(ABC):
         print("\n\nThe Policy Evaluation algorithm converged after {} iterations".format(iter),
               file=self.log_file)
 
-    def policy_evaluation_partial(self, cost_function, transition):
-        iter = 0
-
-        delta = self.stopping_threshold + 1
-        while delta >= self.stopping_threshold and iter <= self.max_iter-1:
-            old_v = self.v_m.copy()
-            delta = 0
-
-            # Traverse all states
-            for x in range(self.height):
-                for y in range(self.width):
-                    # Run one iteration of the Bellman update rule for the value function
-                    self.bellman_update_partial(old_v, x, y, cost_function, transition)
-                    # Compute difference
-                    delta = max(delta, abs(old_v[x, y] - self.v_m[x, y]))
-            iter += 1
-        print("\n\nThe Policy Evaluation algorithm converged after {} iterations".format(iter),
-              file=self.log_file)
 
     def policy_improvement(self, cost_function, transition):
         """Applies the Policy Improvement step."""
@@ -424,37 +372,6 @@ class PolicyIterationLagrange(ABC):
 
         for a in range(self.n_actions):
             self.pi[x, y, a] = prob if a in best_actions else 0
-
-    def bellman_update_partial(self, old_v, x, y, cost_function, transition):
-        if [x, y] in self.terminal_states:
-            return
-        total = 0
-        for action in range(self.n_actions):
-            states = self.env.reset_with_values(info_dicts=[{'states': [x, y]}])
-            assert states[0][0] == x and states[0][1] == y
-            # allow only valid action
-            next_state = [x+self.neighbors[action][0], y+self.neighbors[action][1]]
-            if not ((0<=next_state[0]<self.height) and (0<=next_state[1]<self.width)):
-                continue
-
-            x_coordinate = np.nonzero(transition[x, y, action])[0]
-            y_coordinate = np.nonzero(transition[x, y, action])[1]
-            for i in range(len(x_coordinate)):
-                s_primes = [[x_coordinate[i], y_coordinate[i]]]
-                rewards = [self.reward_mat[s_primes[0][0]][s_primes[0][1]]]
-                costs = cost_function(np.array(s_primes), [action])
-                orig_costs = costs
-                gamma_values = self.gamma * old_v[s_primes[0][0], s_primes[0][1]]
-                current_penalty = self.dual.nu().item()
-                lag_costs = self.apply_lag * current_penalty * orig_costs[0]
-                total += self.pi[x, y, action] * transition[x, y, action, s_primes[0][0], s_primes[0][1]]*(rewards[0] - lag_costs + gamma_values)
-                #print('i, transition', x, y, action, s_primes, i, rewards[0], self.pi[x, y, action], lag_costs, transition[x, y, action, s_primes[0][0], s_primes[0][1]])
-                #input('i')
-        #print('self.pi',x,y,self.pi)
-        #print('cost_function',const_function)
-        #input('Enter...')
-
-        self.v_m[x, y] = total
 
     def bellman_update(self, old_v, x, y, cost_function, transition):
         if [x, y] in self.terminal_states:

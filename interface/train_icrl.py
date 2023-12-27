@@ -382,7 +382,7 @@ def train(config):
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
-    num_of_us = 2000 # number of uniform sampling per iteration
+    num_of_us = 200 # number of uniform sampling per iteration
 
     while vareps_itr > vareps:
 

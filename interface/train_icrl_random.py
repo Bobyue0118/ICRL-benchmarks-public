@@ -367,10 +367,6 @@ def train(config):
     mem_prev, time_prev = print_resource(mem_prev=mem_prev, time_prev=time_prev,
                                          process_name='Setting model', log_file=log_file)
 
-    # obtain expert policy under true constraint function
-
-
-
     # Train
     start_time = time.time()
     print("\nBeginning training", file=log_file, flush=True)
@@ -397,8 +393,6 @@ def train(config):
         #print('Uniform sampling with {} per iteration'.format(num_of_greedy))#
         #print('transition', np.round(transition,4))
         #input('transition')
-        #print('sample_count', np.round(sample_count,1))
-        #input('sample_count')
 
         if itra > 25: # config['running']['n_iters']:
             break
@@ -453,25 +447,21 @@ def train(config):
             #input('itr:1')
 
         ci = get_hoeffding_ci_greedy(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
-        ci[np.where(np.isnan(ci))]=0
+        ci[np.where(np.isnan(ci))]=-np.inf
         #print('ci',np.round(ci,2))
         #input('ci')
         vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
-        print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count), sample_count)
+        print('itra, vareps_itr', itra, vareps_itr, np.max(sample_count))
         #input('vareps_itr')
         np.set_printoptions(suppress=True)
         vareps_itr_list.append(np.round(vareps_itr,2))
 
-        pi_expl = valueIteration(height=env_configs['map_height'], width=env_configs['map_width'], ci=ci, n_actions=env_configs['n_actions'], gamma=config['iteration']['gamma'], transition=transition, env=env_greedy, stopping_threshold=config['iteration']['stopping_threshold'])
+        pi_expl = nominal_agent1.get_equiprobable_policy()
         #print('exploration policy', pi_expl)
         #input('pi_expl')
         obs, acs = env_greedy.step_from_pi_expl(pi_expl,num_of_greedy)
         #print('obs, acs', env_greedy.step_from_pi_expl(pi_expl))
         #input('obs, acs')
-    print('ci',np.round(ci,2))
-    #input('ci')
-    print('exploration policy', pi_expl)
-    #input('pi_expl')
 
     # get V(s), thus Q and advantage function
     # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
@@ -519,7 +509,7 @@ def train(config):
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
-                timesteps += nominal_agent.num_timesteps
+                timesteps += nominal_agent2.num_timesteps
         print("v_m", np.round(nominal_agent.get_v_m(),3))
         #print("policy", np.round(nominal_agent.get_policy(),3))
         #input('itr:3')

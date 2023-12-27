@@ -121,9 +121,10 @@ class WallGridworld(gym.Env):
             for j in range(self.w):
                 for k in self.get_actions([i,j]):
                     for m in self.get_next_states_and_probs([i,j],k):
-                        #print('[i,j],k',[i,j],k,m)
-                        #input('m')
                         self.orig_transition[i,j,k,m[0][0],m[0][1]] = m[1]
+        for terminal_state in self.terminals:
+            for k in range(self.n_actions):
+                self.orig_transition[terminal_state[0],terminal_state[1],k,terminal_state[0],terminal_state[1]]=1
         return self.orig_transition
 
     def get_next_states_and_probs(self, state, action):
@@ -260,15 +261,18 @@ class WallGridworld(gym.Env):
 
     # greedy sampling for ICRL
     def greedy_sampling(self, n_max, obs=[], acs=[], expert_policy=[]):
-        print('greedy sampling:', n_max)
+        #print('greedy sampling:', n_max)
         if n_max == 0:
             self.greedy_sampling_matrix = np.zeros((self.h,self.w,self.n_actions,self.h,self.w))
             sampling_count = np.sum(np.sum(copy(self.greedy_sampling_matrix),4),3)
             for i in range(self.h):
                 for j in range(self.w):
                     for k in range(self.n_actions):
-                        if k not in self.get_actions([i,j]) or [i,j] in self.terminals:
+                        if k not in self.get_actions([i,j]):# or [i,j] in self.terminals:
                             sampling_count[i,j,k] = np.nan
+            for terminal_state in self.terminals:
+                for k in range(self.n_actions):
+                    sampling_count[terminal_state[0],terminal_state[1],k]=0    
             return self.greedy_sampling_matrix_normalized, sampling_count, self.expert_policy_greedy
         else:
             # update greedy sampling matrix
@@ -287,13 +291,13 @@ class WallGridworld(gym.Env):
         # update sample count for ci
         # assign np.nan to (state,action) never visited
         sampling_count = np.sum(np.sum(copy(self.greedy_sampling_matrix),4),3)
-        print('sampling_count', sampling_count)
+        #print('sampling_count', sampling_count)
         #input('sampling_count')
         for i in range(self.h):
             for j in range(self.w):
                 for k in range(self.n_actions):
-                    if k not in self.get_actions([i,j]) or [i,j] in self.terminals:
-                        sampling_count[i,j,k] = np.nan
+                    if k not in self.get_actions([i,j]): # or [i,j] in self.terminals:
+                        sampling_count[i,j,k] = np.nan    
 
         # update estimated expert policy
         obs_unique = list(set(obs))
@@ -305,7 +309,7 @@ class WallGridworld(gym.Env):
     # uniform sampling for ICRL
     def uniform_sampling(self, n_max):
         #cnt = 0
-        print('uniform sampling:',n_max)
+        #print('uniform sampling:',n_max)
         #if self.uniform_sampling_matrix_normalized.any() == True:
             #input('接着更新')
         # uniform sampling
@@ -381,7 +385,7 @@ class WallGridworld(gym.Env):
                  },
                 )
 
-    def step_from_pi_expl(self, pi_expl):
+    def step_from_pi_expl(self, pi_expl,num_of_greedy=500):
         """
         Step the environment.
         """
@@ -392,7 +396,10 @@ class WallGridworld(gym.Env):
         #print(self.state)
         #input('self.state')
         obs.append((self.state[0], self.state[1]))
-        while len(obs) < 500 and self.terminal(self.state) == False:            
+        cnt = 0
+        while len(obs) < num_of_greedy and cnt < 2:# and self.terminal(self.state) == False:            
+            if self.terminal(self.state)==True:
+                cnt += 1                       
             action = np.random.choice(np.arange(0, self.n_actions), p = pi_expl[self.state[0]][self.state[1]])
             action = int(action)
             self.terminated = False

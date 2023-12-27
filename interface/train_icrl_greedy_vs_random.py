@@ -204,19 +204,7 @@ def train(config):
     if isinstance(sampling_env.action_space, gym.spaces.Box):
         action_low, action_high = sampling_env.action_space.low, sampling_env.action_space.high
 
-    # Load expert data
-    expert_path = config['running']['expert_path']
-    if 'expert_rollouts' in config['running'].keys():
-        expert_rollouts = config['running']['expert_rollouts']  # how many rollouts (trajectories) to load
-    else:
-        expert_rollouts = None
-    (expert_obs_rollouts, expert_acs_rollouts, expert_rs_rollouts), expert_mean_reward = load_expert_data(
-        expert_path=expert_path,
-        num_rollouts=expert_rollouts,
-        add_next_step=False,
-        log_file=log_file
-    )
-    #print('expert_obs_rollouts are:',expert_obs_rollouts)
+
     if config['running']['store_by_game']:
         expert_obs = expert_obs_rollouts
         expert_acs = expert_acs_rollouts
@@ -354,22 +342,6 @@ def train(config):
     # Callbacks
     all_callbacks = []
 
-    # Warmup
-    timesteps = 0.
-    if warmup_timesteps:
-        print("\nWarming up", file=log_file, flush=True)
-        with ProgressBarManager(warmup_timesteps) as callback:
-            nominal_agent.learn(total_timesteps=warmup_timesteps,
-                                cost_function=null_cost,  # During warmup we dont want to incur any cost
-                                callback=callback)
-            timesteps += nominal_agent.num_timesteps
-    # monitor the memory and running time
-    mem_prev, time_prev = print_resource(mem_prev=mem_prev, time_prev=time_prev,
-                                         process_name='Setting model', log_file=log_file)
-
-    # obtain expert policy under true constraint function
-
-
 
     # Train
     start_time = time.time()
@@ -460,7 +432,7 @@ def train(config):
         np.set_printoptions(suppress=True)
         vareps_itr_list.append(np.round(vareps_itr,2))
 
-        pi_expl = valueIteration(height=env_configs['map_height'], width=env_configs['map_width'], ci=ci, n_actions=env_configs['n_actions'], gamma=config['iteration']['gamma'], transition=transition, env=env_greedy, stopping_threshold=config['iteration']['stopping_threshold'])
+        pi_expl = nominal_agent1.get_equiprobable_policy()
         print('exploration policy', pi_expl)
         #input('pi_expl')
         obs, acs = env_greedy.step_from_pi_expl(pi_expl)
