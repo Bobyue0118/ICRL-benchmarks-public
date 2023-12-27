@@ -383,7 +383,7 @@ def train(config):
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
-    num_of_greedy = 500 # number of greedy sampling per iteration
+    num_of_greedy = 200 # number of uniform sampling per iteration
     
 
     while vareps_itr > vareps:
@@ -398,7 +398,7 @@ def train(config):
         #print('transition', np.round(transition,4))
         #input('transition')
 
-        if itra > 10000: # config['running']['n_iters']:
+        if itra > 1000: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -512,7 +512,7 @@ def train(config):
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
-                timesteps += nominal_agent.num_timesteps
+                timesteps += nominal_agent2.num_timesteps
         print("v_m", np.round(nominal_agent.get_v_m(),3))
         #print("policy", np.round(nominal_agent.get_policy(),3))
         #input('itr:3')

@@ -121,6 +121,8 @@ class WallGridworld(gym.Env):
             for j in range(self.w):
                 for k in self.get_actions([i,j]):
                     for m in self.get_next_states_and_probs([i,j],k):
+                        #print('[i,j],k',[i,j],k,m)
+                        #input('m')
                         self.orig_transition[i,j,k,m[0][0],m[0][1]] = m[1]
         return self.orig_transition
 

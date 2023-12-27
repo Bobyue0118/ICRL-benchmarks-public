@@ -382,7 +382,7 @@ def train(config):
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
-    num_of_us = 200 # number of uniform sampling per iteration
+    num_of_us = 2000 # number of uniform sampling per iteration
 
     while vareps_itr > vareps:
 
@@ -390,10 +390,10 @@ def train(config):
         estimated_transition, sample_count = env_us.uniform_sampling(num_of_us)
         transition = env_us.get_original_transition()
         #print('Uniform sampling with {} per iteration'.format(num_of_us))#
-        #print('transition', np.round(transition,2))
+        #print('transition', np.round(transition,3))
         #input('transition')
 
-        if itra > 1: # config['running']['n_iters']:
+        if itra > 0: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -454,7 +454,7 @@ def train(config):
         with ProgressBarManager(forward_timesteps) as callback:
             expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
             total_timesteps=forward_timesteps,
-            cost_function=ture_cost_function,  # Cost should come from cost wrapper
+            cost_function=ture_cost_function,  # without use
             expert_policy = expert_policy,
             v_m = expert_value_function,
             #env_for_us=env_us,
@@ -469,7 +469,7 @@ def train(config):
         #print('Q value function complete\n', np.round(Q_value_function,3))
         #print('advantage function complete\n', np.round(advantage_function,3))
         #print('sample_count', sample_count)
-        #input('itr:2')
+        input('itr:2')
         ci = get_hoeffding_ci_us(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=-np.inf
         vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
@@ -492,11 +492,11 @@ def train(config):
                 nominal_agent.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function,  # Cost should come from cost wrapper
-                transition=transition,
+                transition=estimated_transition,
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
-                timesteps += nominal_agent2.num_timesteps
+                timesteps += nominal_agent.num_timesteps
         print("v_m", np.round(nominal_agent.get_v_m(),3))
         #print("policy", np.round(nominal_agent.get_policy(),3))
         #input('itr:3')

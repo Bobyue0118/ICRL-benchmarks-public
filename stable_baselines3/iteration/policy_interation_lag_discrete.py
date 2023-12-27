@@ -192,7 +192,9 @@ class PolicyIterationLagrange(ABC):
         self.pi=expert_policy
         #print('self.pi',np.round(self.pi,2))
         #input('self.pi')
-        for iter in tqdm(range(1)):#need only once policy evaluation 
+        #print('transition',np.round(transition,2))
+        #input('transition')
+        for iter in tqdm(range(2)):#need only once policy evaluation 
             # Run the policy evaluation
             self.policy_evaluation_for_expert(cost_function, transition, unsafe_states)           
         #print('v_m,self.v_m', '\n', np.round(v_m,2), '\n', np.round(self.v_m,2))
@@ -320,7 +322,7 @@ class PolicyIterationLagrange(ABC):
         iter = 0
 
         delta = self.stopping_threshold + 1
-        while delta >= self.stopping_threshold and iter <= self.max_iter-1:
+        while delta >= self.stopping_threshold/100 and iter <= 2*self.max_iter-1:
             old_v = self.v_m.copy()
             delta = 0
 
@@ -332,6 +334,8 @@ class PolicyIterationLagrange(ABC):
                     # Compute difference
                     delta = max(delta, abs(old_v[x, y] - self.v_m[x, y]))
             iter += 1
+            #print('delta',delta,self.stopping_threshold/10)
+            #input('delta')
         print("\n\nThe Policy Evaluation algorithm converged after {} iterations".format(iter),
               file=self.log_file)
 
@@ -508,7 +512,7 @@ class PolicyIterationLagrange(ABC):
                 else:
                     current_penalty = 0
                 lag_costs = self.apply_lag * current_penalty * orig_costs[0]
-                total += self.pi[x, y, action] * transition[x, y, action, s_primes[0][0], s_primes[0][1]]*(rewards[0] - lag_costs + gamma_values)
+                total += self.pi[x, y, action] * transition[x, y, action, s_primes[0][0], s_primes[0][1]]*(rewards[0] - 0*lag_costs + gamma_values)
                 #print('i, transition', x, y, action, s_primes, i, rewards[0], self.pi[x, y, action], lag_costs, transition[x, y, action, s_primes[0][0], s_primes[0][1]])
                 #input('i')
         #print('self.pi',x,y,self.pi)
