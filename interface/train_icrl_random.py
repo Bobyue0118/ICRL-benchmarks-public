@@ -394,7 +394,7 @@ def train(config):
         #print('transition', np.round(transition,4))
         #input('transition')
 
-        if itra > 25: # config['running']['n_iters']:
+        if itra > 1500: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -469,7 +469,24 @@ def train(config):
     #for unsafe_state in env_configs['unsafe_states']:
         #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
     with ProgressBarManager(forward_timesteps) as callback:
-        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
+        expert_value_function = nominal_agent2.expert_learn(
+        total_timesteps=forward_timesteps,
+        cost_function=ture_cost_function,  # Cost should come from cost wrapper
+        expert_policy = expert_policy_greedy,
+        v_m = expert_value_function,
+        #env_for_us=env_greedy,
+        unsafe_states = env_configs['unsafe_states'],
+        transition=estimated_transition,
+        callback=[callback] + all_callbacks
+    )
+        forward_metrics = logger.Logger.CURRENT.name_to_value
+        timesteps += nominal_agent2.num_timesteps
+
+    for unsafe_state in env_configs['unsafe_states']:
+        expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
+
+    with ProgressBarManager(forward_timesteps) as callback:
+        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn1(
         total_timesteps=forward_timesteps,
         cost_function=ture_cost_function,  # Cost should come from cost wrapper
         expert_policy = expert_policy_greedy,
@@ -488,11 +505,11 @@ def train(config):
     #print('sample_count', sample_count)
     #input('itr:2')
 
-    print(sample_count)
-    print(vareps_itr_list)
-    input('itra, vareps_itr')
+    #print(sample_count)
+    #print(vareps_itr_list)
+    #input('itra, vareps_itr')
 
-    for itr in range(config['running']['n_iters']):
+    for itr in range(3):#range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:
             print("\nResetting agent", file=log_file, flush=True)
             nominal_agent = create_nominal_agent()#learn with identified constraint

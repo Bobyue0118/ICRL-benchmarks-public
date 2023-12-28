@@ -358,6 +358,7 @@ def train(config):
     timesteps = 0.
     if warmup_timesteps:
         print("\nWarming up", file=log_file, flush=True)
+        input('Warming up')
         with ProgressBarManager(warmup_timesteps) as callback:
             nominal_agent.learn(total_timesteps=warmup_timesteps,
                                 cost_function=null_cost,  # During warmup we dont want to incur any cost
@@ -383,6 +384,7 @@ def train(config):
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
+    nominal_agent3 = create_nominal_agent()
     num_of_greedy = 50 # number of greedy sampling per iteration
     
 
@@ -400,7 +402,7 @@ def train(config):
         #print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 25: # config['running']['n_iters']:
+        if itra > 1500: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -447,6 +449,7 @@ def train(config):
             for unsafe_state in env_configs['unsafe_states']:
                 #print('unsafe_state', unsafe_state)
                 expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
+                #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
             #print('expert policy for complete\n', np.round(expert_policy,2))
             #input('expert policy complete')
             print('expert value function safe\n', np.round(expert_value_function,3))
@@ -457,7 +460,7 @@ def train(config):
         #print('ci',np.round(ci,2))
         #input('ci')
         vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
-        print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count), sample_count)
+        #print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count), sample_count)
         #input('vareps_itr')
         np.set_printoptions(suppress=True)
         vareps_itr_list.append(np.round(vareps_itr,2))
@@ -470,16 +473,15 @@ def train(config):
         #input('obs, acs')
     print('ci',np.round(ci,2))
     #input('ci')
-    print('exploration policy', pi_expl)
+    #print('exploration policy', pi_expl)
     #input('pi_expl')
 
     # get V(s), thus Q and advantage function
     # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
     print('\n#####get advantage function#####\n')
-    #for unsafe_state in env_configs['unsafe_states']:
-        #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
+    
     with ProgressBarManager(forward_timesteps) as callback:
-        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
+        expert_value_function = nominal_agent2.expert_learn(
         total_timesteps=forward_timesteps,
         cost_function=ture_cost_function,  # Cost should come from cost wrapper
         expert_policy = expert_policy_greedy,
@@ -491,7 +493,23 @@ def train(config):
     )
         forward_metrics = logger.Logger.CURRENT.name_to_value
         timesteps += nominal_agent2.num_timesteps
-           
+
+    for unsafe_state in env_configs['unsafe_states']:
+        expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
+
+    with ProgressBarManager(forward_timesteps) as callback:
+        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn1(
+        total_timesteps=forward_timesteps,
+        cost_function=ture_cost_function,  # Cost should come from cost wrapper
+        expert_policy = expert_policy_greedy,
+        v_m = expert_value_function,
+        #env_for_us=env_greedy,
+        unsafe_states = env_configs['unsafe_states'],
+        transition=estimated_transition,
+        callback=[callback] + all_callbacks
+    )
+        forward_metrics = logger.Logger.CURRENT.name_to_value
+        timesteps += nominal_agent2.num_timesteps
     print('expert value function complete\n', np.round(expert_value_function,3))
     #print('Q value function complete\n', np.round(Q_value_function,3))
     #print('advantage function complete\n', np.round(advantage_function,3))
@@ -500,9 +518,9 @@ def train(config):
 
     print(sample_count)
     print(vareps_itr_list)
-    input('itra, vareps_itr')
+    #input('itra, vareps_itr')
 
-    for itr in range(config['running']['n_iters']):
+    for itr in range(3):#range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:
             print("\nResetting agent", file=log_file, flush=True)
             nominal_agent = create_nominal_agent()#learn with identified constraint
@@ -510,9 +528,9 @@ def train(config):
         
         # learn identified constraint
         if itr >= 1:
-            print('\n#####learn identified constraint#####\n')
+            print('\n#####learn identified constraint#####', itr, '\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                nominal_agent.learn(
+                _ =nominal_agent.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function,  # Cost should come from cost wrapper
                 transition=estimated_transition,

@@ -143,7 +143,7 @@ class ConstraintDiscrete(nn.Module):
             nominal_obs: np.ndarray,
             **kwargs
     ) -> Dict[str, Any]:
-        zeta = 1 #按照论文中，是一个大于\epsilon的数
+        zeta = 0.1 #按照论文中，是一个大于\epsilon的数
         A_min = 0 #由于transition model是stochastic，所以可以加入一个阈值，减少因为stochastic导致的A>0
         A = np.round(kwargs['advantage_function'],2) # 防止某些明明是0，但是因为精度，比0大一点的也被下面算进去
         #print('A:',A)

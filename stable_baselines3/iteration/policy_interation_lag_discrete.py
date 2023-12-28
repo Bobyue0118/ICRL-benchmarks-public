@@ -160,6 +160,8 @@ class PolicyIterationLagrange(ABC):
         policy_stable, dual_stable = False, False
         iter = 0
         for iter in tqdm(range(total_timesteps)):
+            print('\npolicy_stable',policy_stable,dual_stable,'\n')
+            #input('1')
             if policy_stable and dual_stable:
                 print("\nStable at Iteration {0}.".format(iter), file=self.log_file)
                 break
@@ -199,6 +201,34 @@ class PolicyIterationLagrange(ABC):
             self.policy_evaluation_for_expert(cost_function, transition, unsafe_states)           
         #print('v_m,self.v_m', '\n', np.round(v_m,2), '\n', np.round(self.v_m,2))
         #input('v_m,self.v_m')
+        
+                    
+        return self.v_m
+
+    # expert learn its value function, Q-value function, thus advantage function
+    def expert_learn1(self,
+              #env_for_us,
+              total_timesteps: int,
+              cost_function: Union[str, Callable],
+              expert_policy: np.ndarray,
+              v_m: np.ndarray, 
+              unsafe_states: list,
+              latent_info_str: Union[str, Callable] = '',              
+              transition=None,
+              callback=None,):
+
+        iter = 0
+        self.pi=expert_policy
+        #print('self.pi',np.round(self.pi,2))
+        #input('self.pi')
+        #print('transition',np.round(transition,2))
+        #input('transition')
+        #for iter in tqdm(range(2)):#need only once policy evaluation 
+            # Run the policy evaluation
+            #self.policy_evaluation_for_expert(cost_function, transition, unsafe_states)           
+        #print('v_m,self.v_m', '\n', np.round(v_m,2), '\n', np.round(self.v_m,2))
+        #input('v_m,self.v_m')
+        self.v_m=v_m
         Q = np.zeros((self.height, self.width, self.n_actions))
         A = np.zeros((self.height, self.width, self.n_actions))
         if transition is not None:
@@ -214,7 +244,6 @@ class PolicyIterationLagrange(ABC):
         
                     
         return self.v_m, Q, A
-
 
     def step(self, action):
         #input('\nstep0')
@@ -372,6 +401,7 @@ class PolicyIterationLagrange(ABC):
 
         for a in range(self.n_actions):
             self.pi[x, y, a] = prob if a in best_actions else 0
+
 
     def bellman_update(self, old_v, x, y, cost_function, transition):
         if [x, y] in self.terminal_states:

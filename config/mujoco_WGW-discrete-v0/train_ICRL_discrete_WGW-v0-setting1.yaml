@@ -33,7 +33,7 @@ running:
 iteration:
   warmup_timesteps: 0
   stopping_threshold: 0.001 #0.001
-  max_iter: 20 #20
+  max_iter: 40 #20
   penalty_initial_value: 0.1
   penalty_learning_rate: 0.1
   gamma: 0.7 #0.7
