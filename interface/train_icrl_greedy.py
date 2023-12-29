@@ -402,13 +402,13 @@ def train(config):
         #print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 1500: # config['running']['n_iters']:
+        if itra > 500: # config['running']['n_iters']:
             break
         else:
             itra += 1
 
         if itra == 1:
-            # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
+            # get expert policy for unsafe states, use true cost function
             print('\n#####get expert policy for unsafe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
                 expert_value_function_unsafe = nominal_agent0.learn(
@@ -440,16 +440,15 @@ def train(config):
                 forward_metrics = logger.Logger.CURRENT.name_to_value
                 timesteps += nominal_agent1.num_timesteps
             optimal_policy_with_true_constraint = nominal_agent1.get_policy()
-            #print('expert policy for safe states:\n',optimal_policy_with_true_constraint)
+            #print('expert policy for safe states:\n',np.round(optimal_policy_with_true_constraint,2))
             #input('expert_policy_safe')
             expert_policy = deepcopy(optimal_policy_with_true_constraint)
+            if env_configs['unsafe_states'] != [[2,0], [2,1], [2,2], [2,3], [2,4], [4,2], [4,3], [4,4], [4,5], [4,6]]:
+                for unsafe_state in env_configs['unsafe_states']:
+                    #print('unsafe_state', unsafe_state)
+                    expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
             #print('expert policy for safe states\n', np.round(expert_policy,2))
             #input('expert policy safe')
-            # for those unsafe states, the expert policy is defined as the optimal policy without constraint
-            for unsafe_state in env_configs['unsafe_states']:
-                #print('unsafe_state', unsafe_state)
-                expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
-                #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
             #print('expert policy for complete\n', np.round(expert_policy,2))
             #input('expert policy complete')
             print('expert value function safe\n', np.round(expert_value_function,3))
@@ -460,7 +459,7 @@ def train(config):
         #print('ci',np.round(ci,2))
         #input('ci')
         vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
-        #print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count), sample_count)
+        print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count), sample_count)
         #input('vareps_itr')
         np.set_printoptions(suppress=True)
         vareps_itr_list.append(np.round(vareps_itr,2))
@@ -468,8 +467,8 @@ def train(config):
         pi_expl = valueIteration(height=env_configs['map_height'], width=env_configs['map_width'], ci=ci, n_actions=env_configs['n_actions'], gamma=config['iteration']['gamma'], transition=transition, env=env_greedy, stopping_threshold=config['iteration']['stopping_threshold'])
         #print('exploration policy', pi_expl)
         #input('pi_expl')
-        obs, acs = env_greedy.step_from_pi_expl(pi_expl,num_of_greedy)
-        #print('obs, acs', env_greedy.step_from_pi_expl(pi_expl))
+        obs, acs = env_greedy.step_from_pi_expl(pi_expl,num_of_greedy=num_of_greedy)
+        #print('obs, acs', obs, acs, len(obs))
         #input('obs, acs')
     print('ci',np.round(ci,2))
     #input('ci')
@@ -481,11 +480,11 @@ def train(config):
     print('\n#####get advantage function#####\n')
     
     with ProgressBarManager(forward_timesteps) as callback:
-        expert_value_function = nominal_agent2.expert_learn(
+        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
         total_timesteps=forward_timesteps,
         cost_function=ture_cost_function,  # Cost should come from cost wrapper
         expert_policy = expert_policy_greedy,
-        v_m = expert_value_function,
+        #v_m = expert_value_function,
         #env_for_us=env_greedy,
         unsafe_states = env_configs['unsafe_states'],
         transition=estimated_transition,
@@ -494,31 +493,18 @@ def train(config):
         forward_metrics = logger.Logger.CURRENT.name_to_value
         timesteps += nominal_agent2.num_timesteps
 
-    for unsafe_state in env_configs['unsafe_states']:
-        expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
+    #for unsafe_state in env_configs['unsafe_states']:
+        #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
 
-    with ProgressBarManager(forward_timesteps) as callback:
-        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn1(
-        total_timesteps=forward_timesteps,
-        cost_function=ture_cost_function,  # Cost should come from cost wrapper
-        expert_policy = expert_policy_greedy,
-        v_m = expert_value_function,
-        #env_for_us=env_greedy,
-        unsafe_states = env_configs['unsafe_states'],
-        transition=estimated_transition,
-        callback=[callback] + all_callbacks
-    )
-        forward_metrics = logger.Logger.CURRENT.name_to_value
-        timesteps += nominal_agent2.num_timesteps
     print('expert value function complete\n', np.round(expert_value_function,3))
     #print('Q value function complete\n', np.round(Q_value_function,3))
     #print('advantage function complete\n', np.round(advantage_function,3))
     #print('sample_count', sample_count)
     #input('itr:2')
 
-    print(sample_count)
+    #print(sample_count)
     print(vareps_itr_list)
-    #input('itra, vareps_itr')
+    input('itra, vareps_itr')
 
     for itr in range(3):#range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:

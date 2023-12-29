@@ -119,6 +119,7 @@ class PolicyIterationLagrange(ABC):
                         if not ((0<=next_state[0]<self.height) and (0<=next_state[1]<self.width)):
                             pi[x][y][action] = 0
                     pi[x][y] = pi[x][y] * 1/np.sum(pi[x][y])
+
         #print('pi',pi) 
         #input('pi')
         return pi
@@ -184,7 +185,7 @@ class PolicyIterationLagrange(ABC):
               total_timesteps: int,
               cost_function: Union[str, Callable],
               expert_policy: np.ndarray,
-              v_m: np.ndarray, 
+              #v_m: np.ndarray, 
               unsafe_states: list,
               latent_info_str: Union[str, Callable] = '',              
               transition=None,
@@ -201,34 +202,7 @@ class PolicyIterationLagrange(ABC):
             self.policy_evaluation_for_expert(cost_function, transition, unsafe_states)           
         #print('v_m,self.v_m', '\n', np.round(v_m,2), '\n', np.round(self.v_m,2))
         #input('v_m,self.v_m')
-        
-                    
-        return self.v_m
-
-    # expert learn its value function, Q-value function, thus advantage function
-    def expert_learn1(self,
-              #env_for_us,
-              total_timesteps: int,
-              cost_function: Union[str, Callable],
-              expert_policy: np.ndarray,
-              v_m: np.ndarray, 
-              unsafe_states: list,
-              latent_info_str: Union[str, Callable] = '',              
-              transition=None,
-              callback=None,):
-
-        iter = 0
-        self.pi=expert_policy
-        #print('self.pi',np.round(self.pi,2))
-        #input('self.pi')
-        #print('transition',np.round(transition,2))
-        #input('transition')
-        #for iter in tqdm(range(2)):#need only once policy evaluation 
-            # Run the policy evaluation
-            #self.policy_evaluation_for_expert(cost_function, transition, unsafe_states)           
-        #print('v_m,self.v_m', '\n', np.round(v_m,2), '\n', np.round(self.v_m,2))
-        #input('v_m,self.v_m')
-        self.v_m=v_m
+        #self.v_m=v_m
         Q = np.zeros((self.height, self.width, self.n_actions))
         A = np.zeros((self.height, self.width, self.n_actions))
         if transition is not None:

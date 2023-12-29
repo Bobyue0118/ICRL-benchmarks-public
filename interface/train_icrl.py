@@ -399,7 +399,7 @@ def train(config):
             itra += 1
 
         if itra == 1:
-            # get expert policy for unsafe states, constraint_net.cost_function_zero denotes without constraint
+            # get expert policy for unsafe states, use true cost function
             print('\n#####get expert policy for unsafe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
                 expert_value_function_unsafe = nominal_agent0.learn(
@@ -434,12 +434,12 @@ def train(config):
             #print('expert policy for safe states:\n',optimal_policy_with_true_constraint)
             #input('expert_policy_safe')
             expert_policy = deepcopy(optimal_policy_with_true_constraint)
+            if env_configs['unsafe_states'] != [[2,0], [2,1], [2,2], [2,3], [2,4], [4,2], [4,3], [4,4], [4,5], [4,6]]:
+                for unsafe_state in env_configs['unsafe_states']:
+                    #print('unsafe_state', unsafe_state)
+                    expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
             #print('expert policy for safe states\n', np.round(expert_policy,2))
             #input('expert policy safe')
-            # for those unsafe states, the expert policy is defined as the optimal policy without constraint
-            for unsafe_state in env_configs['unsafe_states']:
-                #print('unsafe_state', unsafe_state)
-                expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
             #print('expert policy for complete\n', np.round(expert_policy,2))
             #input('expert policy complete')
             print('expert value function safe\n', np.round(expert_value_function,3))
@@ -459,11 +459,11 @@ def train(config):
     #for unsafe_state in env_configs['unsafe_states']:
         #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
     with ProgressBarManager(forward_timesteps) as callback:
-        expert_value_function = nominal_agent2.expert_learn(
+        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
         total_timesteps=forward_timesteps,
         cost_function=ture_cost_function,  # without use
         expert_policy = expert_policy,
-        v_m = expert_value_function,
+        #v_m = expert_value_function,
         #env_for_us=env_us,
         unsafe_states = env_configs['unsafe_states'],
         transition=estimated_transition,
@@ -471,24 +471,7 @@ def train(config):
     )
         forward_metrics = logger.Logger.CURRENT.name_to_value
         timesteps += nominal_agent2.num_timesteps
-
-    for unsafe_state in env_configs['unsafe_states']:
-        expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
-
-    with ProgressBarManager(forward_timesteps) as callback:
-        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn1(
-        total_timesteps=forward_timesteps,
-        cost_function=ture_cost_function,  # Cost should come from cost wrapper
-        expert_policy = expert_policy,
-        v_m = expert_value_function,
-        #env_for_us=env_greedy,
-        unsafe_states = env_configs['unsafe_states'],
-        transition=estimated_transition,
-        callback=[callback] + all_callbacks
-    )
-        forward_metrics = logger.Logger.CURRENT.name_to_value
-        timesteps += nominal_agent2.num_timesteps
-           
+          
         print('expert value function complete\n', np.round(expert_value_function,3))
         #print('Q value function complete\n', np.round(Q_value_function,3))
         #print('advantage function complete\n', np.round(advantage_function,3))

@@ -271,6 +271,8 @@ class WallGridworld(gym.Env):
                         if k not in self.get_actions([i,j]):# or [i,j] in self.terminals:
                             sampling_count[i,j,k] = np.nan
             for terminal_state in self.terminals:
+                print(self.terminals)
+                input('1')
                 for k in range(self.n_actions):
                     sampling_count[terminal_state[0],terminal_state[1],k]=0    
             return self.greedy_sampling_matrix_normalized, sampling_count, self.expert_policy_greedy
