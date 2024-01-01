@@ -171,7 +171,7 @@ def train(config):
     else:
         planning_config = None
 
-    # init uniform sampling env
+    # init greedy sampling env
     env_configs_copy = copy(env_configs)
     env_greedy = gym.make(id=config['env']['train_env_id'], **env_configs_copy)
     
@@ -396,7 +396,7 @@ def train(config):
         else:
             estimated_transition, sample_count, expert_policy_greedy = env_greedy.greedy_sampling(num_of_greedy, obs, acs, expert_policy)
         transition = env_greedy.get_original_transition()
-        #print('Uniform sampling with {} per iteration'.format(num_of_greedy))#
+        #print('Greedy sampling with {} per iteration'.format(num_of_greedy))#
         #print('transition', np.round(transition,4))
         #input('transition')
         #print('sample_count', np.round(sample_count,1))
@@ -458,7 +458,7 @@ def train(config):
         ci[np.where(np.isnan(ci))]=0
         #print('ci',np.round(ci,2))
         #input('ci')
-        vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
+        vareps_itr = config['iteration']['gamma']*np.max(ci)/(1-config['iteration']['gamma'])
         print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count), sample_count)
         #input('vareps_itr')
         np.set_printoptions(suppress=True)

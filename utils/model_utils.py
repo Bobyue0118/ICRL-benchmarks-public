@@ -263,6 +263,24 @@ def get_hoeffding_ci_us(height, width, n_actions, sample_count, v_m, zeta_max, g
     #input('in3')
     return ci
 
+def get_hoeffding_ci_active(height, width, n_actions, sample_count, v_m, zeta_max, gamma, epsilon, delta=0.1):
+    n_states = height*width
+    sample_count = np.maximum(sample_count, 1)
+    r_max = 1
+    #print('sample_count1',sample_count)
+    #input('in')
+    ci = np.sqrt(
+        np.log(36 * n_states * n_actions * np.square(sample_count) / delta)
+        / (2*sample_count)
+    )
+    #print('ci',np.round(ci,1))
+    #input('in2')
+    v_m = np.repeat(v_m, n_actions).reshape(height, width, n_actions)
+    ci *= gamma * ((zeta_max/(1-gamma))*(2*np.max(v_m)+r_max*(1+gamma)/(1-gamma))  + epsilon)
+    #print('ci',np.round(ci,1))
+    #input('in3')
+    return ci
+
 def get_hoeffding_ci_greedy(height, width, n_actions, sample_count, v_m, zeta_max, gamma, epsilon, delta=0.1):
     n_states = height*width
     sample_count = np.maximum(sample_count, 1)
@@ -332,3 +350,55 @@ def valueIteration(height, width, ci, n_actions, gamma, transition, env, stoppin
             #input('v')            
             break
     return pi
+
+def costValueIteration(height, width, ci, n_actions, gamma, transition, env, stopping_threshold):
+    v = np.inf*np.ones((height, width))
+    v_prime = np.zeros((height, width))
+    pi = np.zeros((height, width, n_actions))
+    #print("During the value iteration:\n")
+    
+    while True:
+        error = 0
+        v = deepcopy(v_prime)
+        #print('v',np.round(v,2))
+        #input('v')
+        #print(transition[6][6][0][6][6],ci[6][6][0])
+        #input('v')
+        pi = np.zeros((height, width, n_actions))
+        for i in range(height):
+            for j in range(width):
+                v_list=[]
+                v_list_action=[]
+                for action in env.get_actions([i,j]):
+                    v_ = ci[i][j][action]
+                    v_list_action.append(action)
+                    #print(ci)
+                    #input('1')
+                    for m in env.get_next_states_and_probs([i,j], action):
+                        v_ += gamma*transition[i][j][action][m[0][0]][m[0][1]]*v[m[0][0]][m[0][1]]
+                        #print(v_,m,transition[i][j][action][m[0][0]][m[0][1]],v[m[0][0]][m[0][1]])
+                        #input('2')
+                    v_list.append(v_)
+                    #print(v_list)
+                    #input('3')
+                #print(v_list)
+                #input('4')
+                v_prime[i][j] = max(v_list) # Bellman update
+                #print(v_prime[i][j])
+                #input('5')
+                best_action = [v_list_action[index] for index, value in enumerate(v_list) if value == max(v_list)]
+                #print(best_action)
+                #input('best_action')
+                for k in best_action:
+                    pi[i][j][k] = 1/len(best_action)
+                error = max(error, abs(v_prime[i][j]-v[i][j]))
+                #v_prime[reward_states[0][0],reward_states[0][1]]=np.max(v_prime)
+                #print(error)
+                #input('error')
+                
+        if error < stopping_threshold:
+            #print('v',np.round(v,2))
+            #print('pi',pi)
+            #input('v')            
+            break
+    return v_prime

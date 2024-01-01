@@ -28,7 +28,8 @@ from stable_baselines3.common import logger
 from stable_baselines3.common.vec_env import sync_envs_normalization, VecNormalize
 from utils.data_utils import read_args, load_config, ProgressBarManager, del_and_make, load_expert_data, \
     get_input_features_dim, process_memory, print_resource
-from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_greedy, valueIteration
+from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_active, costValueIteration
+from utils.optimization import cal_gra_of_x, cal_gra_of_lambda_1, cal_gra_of_lambda_2, cal_R_k, update_x, update_lambda_1, update_lambda_2, cal_pi_expl
 
 import warnings  # disable warnings
 
@@ -171,9 +172,9 @@ def train(config):
     else:
         planning_config = None
 
-    # init uniform sampling env
+    # init active sampling env
     env_configs_copy = copy(env_configs)
-    env_greedy = gym.make(id=config['env']['train_env_id'], **env_configs_copy)
+    env_active = gym.make(id=config['env']['train_env_id'], **env_configs_copy)
     
 
 
@@ -377,6 +378,7 @@ def train(config):
     print("\nBeginning training", file=log_file, flush=True)
     best_true_reward, best_true_cost, best_forward_kl, best_reverse_kl = -np.inf, np.inf, np.inf, np.inf
     vareps = 0.1 # target accuracy
+    gamma = config['env']['reward_gamma']
     vareps_itr = 1/(1-config['env']['reward_gamma'])
     vareps_itr_list = []
     itra = 0
@@ -385,18 +387,25 @@ def train(config):
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
     nominal_agent3 = create_nominal_agent()
-    num_of_greedy = 50 # number of greedy sampling per iteration
-    
+    num_of_active = 50 # number of active sampling per iteration
+    lambda_1 = 1
+    lambda_2 = 1
+    eps = 0
+    constant = 1
+    x = env_active.get_initial_occupancy_measure()
+    #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
+
+
 
     while vareps_itr > vareps:
 
-	# greedy sampling, update for estimated transition and estimated expert policy
+	# active sampling, update for estimated transition and estimated expert policy
         if itra == 0:
-            _, sample_count, _ = env_greedy.greedy_sampling(0)
+            estimated_transition, sample_count, expert_policy_active = env_active.active_sampling(0)
         else:
-            estimated_transition, sample_count, expert_policy_greedy = env_greedy.greedy_sampling(num_of_greedy, obs, acs, expert_policy)
-        transition = env_greedy.get_original_transition()
-        #print('Uniform sampling with {} per iteration'.format(num_of_greedy))#
+            estimated_transition, sample_count, expert_policy_active = env_active.active_sampling(num_of_active, obs, acs, expert_policy)
+        transition = env_active.get_original_transition()
+        #print('Active sampling with {} per iteration'.format(num_of_active))#
         #print('transition', np.round(transition,4))
         #input('transition')
         #print('sample_count', np.round(sample_count,1))
@@ -406,6 +415,35 @@ def train(config):
             break
         else:
             itra += 1
+        print('itra:', itra)
+        #input('itra')
+        if itra >= 2: 
+            # get V(s), thus Q and advantage function
+            # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
+            print('\n#####get advantage function#####\n')
+    
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
+                total_timesteps=forward_timesteps,
+                cost_function=ture_cost_function,  # Cost should come from cost wrapper
+                expert_policy = expert_policy_active,
+                #v_m = expert_value_function,
+                #env_for_us=env_active,
+                unsafe_states = env_configs['unsafe_states'],
+                transition=estimated_transition,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent2.num_timesteps
+
+            print('expert value function complete\n', np.round(expert_value_function,3),expert_policy_active)
+            #input('expert value function complete')
+            # update c_k
+            constraint_net.train_traj_nn(nominal_obs=[], advantage_function=advantage_function)
+            #print('Q value function complete\n', np.round(Q_value_function,3))
+            #print('advantage function complete\n', np.round(advantage_function,3))
+            #print('sample_count', sample_count)
+            #input('itr:2')
 
         if itra == 1:
             # get expert policy for unsafe states, use true cost function
@@ -454,53 +492,44 @@ def train(config):
             print('expert value function safe\n', np.round(expert_value_function,3))
             #input('itr:1')
 
-        ci = get_hoeffding_ci_greedy(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
+        ci = get_hoeffding_ci_active(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=0
         #print('ci',np.round(ci,2))
         #input('ci')
-        vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
+        vareps_itr = config['iteration']['gamma']*np.max(ci)/(1-config['iteration']['gamma'])
         print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count), sample_count)
         #input('vareps_itr')
         np.set_printoptions(suppress=True)
         vareps_itr_list.append(np.round(vareps_itr,2))
 
-        pi_expl = valueIteration(height=env_configs['map_height'], width=env_configs['map_width'], ci=ci, n_actions=env_configs['n_actions'], gamma=config['iteration']['gamma'], transition=transition, env=env_greedy, stopping_threshold=config['iteration']['stopping_threshold'])
-        #print('exploration policy', pi_expl)
-        #input('pi_expl')
-        obs, acs = env_greedy.step_from_pi_expl(pi_expl,num_of_greedy=num_of_greedy)
-        #print('obs, acs', obs, acs, len(obs))
+        """Implements the two-timescale stochastic approximation"""
+        v_c = costValueIteration(height=env_configs['map_height'], width=env_configs['map_width'], ci=constraint_net.cost_matrix_sa, n_actions=env_configs['n_actions'], gamma=config['iteration']['gamma'], transition=transition, env=env_active, stopping_threshold=config['iteration']['stopping_threshold'])[env_configs['start_states'][0][0]][env_configs['start_states'][0][0]]
+        R_k = cal_R_k(gamma, transition, estimated_transition, expert_policy, expert_policy_active, R_max = 1)
+        a_k = constant/itra
+        b_k = constant/itra**0.6
+        gra_of_x = cal_gra_of_x(lambda_1, lambda_2, constraint_net.cost_matrix_sa, env_active.get_reward_mat_sa(), env_active)
+        gra_of_lambda_1 = cal_gra_of_lambda_1(gamma, v_c, vareps_itr, eps, x, constraint_net.cost_matrix_sa)
+        gra_of_lambda_2 = cal_gra_of_lambda_2(gamma, R_k, x, env_active.get_reward_mat_sa())        
+        print('occupancy measure\n', np.round(x, 6),'cost matrix\n', constraint_net.cost_matrix_sa, 'reward_sa\n', env_active.get_reward_mat_sa())
+        #input('occupancy measure')
+        x = update_x(x, gra_of_x, a_k)
+        print('updated occupancy measure\n', np.round(x, 6))
+        #input('updated occupancy measure')
+                                                                                                                   
+        lambda_1 = update_lambda_1(lambda_1, gra_of_lambda_1, b_k)
+        lambda_2 = update_lambda_2(lambda_2, gra_of_lambda_2, b_k) 
+        pi_expl = cal_pi_expl(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'], x_k=x, env=env_active, k=itra)
+        print('exploration policy\n', np.round(pi_expl,3), 'occupancy measure\n', np.round(x,3))
+        #input('pi_expl and occupancy measure')
+        obs, acs = env_active.step_from_pi_expl_active(pi_expl,num_of_active=num_of_active)
+        print('obs, acs', obs, acs, len(obs)) 
         #input('obs, acs')
     print('ci',np.round(ci,2))
     #input('ci')
     #print('exploration policy', pi_expl)
     #input('pi_expl')
 
-    # get V(s), thus Q and advantage function
-    # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
-    print('\n#####get advantage function#####\n')
-    
-    with ProgressBarManager(forward_timesteps) as callback:
-        expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
-        total_timesteps=forward_timesteps,
-        cost_function=ture_cost_function,  # Cost should come from cost wrapper
-        expert_policy = expert_policy_greedy,
-        #v_m = expert_value_function,
-        #env_for_us=env_greedy,
-        unsafe_states = env_configs['unsafe_states'],
-        transition=estimated_transition,
-        callback=[callback] + all_callbacks
-    )
-        forward_metrics = logger.Logger.CURRENT.name_to_value
-        timesteps += nominal_agent2.num_timesteps
 
-    #for unsafe_state in env_configs['unsafe_states']:
-        #expert_value_function[unsafe_state[0]][unsafe_state[1]] = expert_value_function_unsafe[unsafe_state[0]][unsafe_state[1]]
-
-    print('expert value function complete\n', np.round(expert_value_function,3))
-    #print('Q value function complete\n', np.round(Q_value_function,3))
-    #print('advantage function complete\n', np.round(advantage_function,3))
-    #print('sample_count', sample_count)
-    #input('itr:2')
 
     #print(sample_count)
     print(vareps_itr_list)
