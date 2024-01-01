@@ -24,7 +24,10 @@ def cal_gra_of_lambda_2(gamma, R_k, x, reward):
     return (1-gamma)*(1+R_k)-np.sum(x*reward)
 
 def update_x(x, gra_of_x, a_k):
-    return x-a_k*gra_of_x
+    y=x-a_k*gra_of_x
+    y[y<0]=0
+    y /= np.sum(y)
+    return y
 
 def update_lambda_1(lambda_1, gra_of_lambda_1, b_k):
     return lambda_1+b_k*gra_of_lambda_1

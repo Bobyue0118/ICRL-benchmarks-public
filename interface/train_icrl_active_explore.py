@@ -388,8 +388,8 @@ def train(config):
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
     nominal_agent3 = create_nominal_agent()
     num_of_active = 50 # number of active sampling per iteration
-    lambda_1 = 1
-    lambda_2 = 1
+    lambda_1 = 0
+    lambda_2 = 0
     eps = 0
     constant = 1
     x = env_active.get_initial_occupancy_measure()
