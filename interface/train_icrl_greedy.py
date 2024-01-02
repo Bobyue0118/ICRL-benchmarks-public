@@ -377,7 +377,7 @@ def train(config):
     print("\nBeginning training", file=log_file, flush=True)
     best_true_reward, best_true_cost, best_forward_kl, best_reverse_kl = -np.inf, np.inf, np.inf, np.inf
     vareps = 0.1 # target accuracy
-    vareps_itr = 1/(1-config['env']['reward_gamma'])
+    vareps_itr = 1/(1-config['iteration']['gamma'])
     vareps_itr_list = []
     itra = 0
     nominal_agent = create_nominal_agent()

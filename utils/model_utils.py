@@ -275,8 +275,8 @@ def get_hoeffding_ci_active(height, width, n_actions, sample_count, v_m, zeta_ma
     )
     #print('ci',np.round(ci,1))
     #input('in2')
-    v_m = np.repeat(v_m, n_actions).reshape(height, width, n_actions)
-    ci *= gamma * ((zeta_max/(1-gamma))*(2*np.max(v_m)+r_max*(1+gamma)/(1-gamma))  + epsilon)
+    #v_m = np.repeat(v_m, n_actions).reshape(height, width, n_actions)
+    ci *= gamma * ((zeta_max/(1-gamma))*(2*r_max/(1-gamma)+r_max*(1+gamma)/(1-gamma))  + epsilon)
     #print('ci',np.round(ci,1))
     #input('in3')
     return ci

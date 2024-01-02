@@ -378,21 +378,22 @@ def train(config):
     print("\nBeginning training", file=log_file, flush=True)
     best_true_reward, best_true_cost, best_forward_kl, best_reverse_kl = -np.inf, np.inf, np.inf, np.inf
     vareps = 0.1 # target accuracy
-    gamma = config['env']['reward_gamma']
-    vareps_itr = 1/(1-config['env']['reward_gamma'])
+    gamma = config['iteration']['gamma']
+    vareps_itr = 1/(1-config['iteration']['gamma'])
     vareps_itr_list = []
     itra = 0
     nominal_agent = create_nominal_agent()
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
-    nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
-    nominal_agent3 = create_nominal_agent()
-    num_of_active = 50 # number of active sampling per iteration
+    nominal_agent2 = create_nominal_agent()#learn \hat{c_k}
+    nominal_agent3 = create_nominal_agent()#learn V^{\hat{\pi^\expert}}
+    num_of_active = 80 # number of active sampling per iteration
     lambda_1 = 0
     lambda_2 = 0
     eps = 0
-    constant = 1
+    constant = 0.5
     x = env_active.get_initial_occupancy_measure()
+    #expert_value_function1 = 1/(1-config['iteration']['gamma'])*np.array()
     #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
 
 
@@ -408,42 +409,15 @@ def train(config):
         #print('Active sampling with {} per iteration'.format(num_of_active))#
         #print('transition', np.round(transition,4))
         #input('transition')
-        #print('sample_count', np.round(sample_count,1))
+        print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 500: # config['running']['n_iters']:
+        if itra > 50: # config['running']['n_iters']:
             break
         else:
             itra += 1
         print('itra:', itra)
         #input('itra')
-        if itra >= 2: 
-            # get V(s), thus Q and advantage function
-            # unsafe states的V(s)直接替换就行，也可以更换expert policy后再policy evaluation，但是得去除bellman_update()里的lag_costs。
-            print('\n#####get advantage function#####\n')
-    
-            with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
-                total_timesteps=forward_timesteps,
-                cost_function=ture_cost_function,  # Cost should come from cost wrapper
-                expert_policy = expert_policy_active,
-                #v_m = expert_value_function,
-                #env_for_us=env_active,
-                unsafe_states = env_configs['unsafe_states'],
-                transition=estimated_transition,
-                callback=[callback] + all_callbacks
-            )
-                forward_metrics = logger.Logger.CURRENT.name_to_value
-                timesteps += nominal_agent2.num_timesteps
-
-            print('expert value function complete\n', np.round(expert_value_function,3),expert_policy_active)
-            #input('expert value function complete')
-            # update c_k
-            constraint_net.train_traj_nn(nominal_obs=[], advantage_function=advantage_function)
-            #print('Q value function complete\n', np.round(Q_value_function,3))
-            #print('advantage function complete\n', np.round(advantage_function,3))
-            #print('sample_count', sample_count)
-            #input('itr:2')
 
         if itra == 1:
             # get expert policy for unsafe states, use true cost function
@@ -453,7 +427,6 @@ def train(config):
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function_zero,  # without constraint
                 transition = transition,
-                #env_for_us=env_us,
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
@@ -470,9 +443,8 @@ def train(config):
             with ProgressBarManager(forward_timesteps) as callback:
                 expert_value_function = nominal_agent1.learn(
                 total_timesteps=forward_timesteps,
-                cost_function=ture_cost_function,  # Cost should come from cost wrapper
+                cost_function=ture_cost_function,  # with true constraint
                 transition = transition,
-                #env_for_us=env_us,
                 callback=[callback] + all_callbacks
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
@@ -492,7 +464,45 @@ def train(config):
             print('expert value function safe\n', np.round(expert_value_function,3))
             #input('itr:1')
 
-        ci = get_hoeffding_ci_active(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
+        if itra >= 2: 
+            # update \hat{c_k}
+            print('\n#####Update c_k#####\n')
+    
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
+                total_timesteps=forward_timesteps,
+                cost_function=ture_cost_function,  # we do not use this
+                expert_policy = expert_policy_active,
+                unsafe_states = env_configs['unsafe_states'],
+                transition=estimated_transition,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent2.num_timesteps
+
+            print('expert value function complete\n', np.round(expert_value_function,3),'expert_policy_active', expert_policy_active)
+            #input('expert value function complete')
+            # update c_k
+            constraint_net.train_traj_nn(nominal_obs=[], advantage_function=advantage_function)
+            #print('Q value function complete\n', np.round(Q_value_function,3))
+            #print('advantage function complete\n', np.round(advantage_function,3))
+            #print('sample_count', sample_count)
+            #input('itr:2')
+
+            print("####Learn V^{r,\hat{\pi^\expert}}####")
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function1, Q_value_function1, advantage_function1 = nominal_agent3.expert_learn(
+                total_timesteps=forward_timesteps,
+                cost_function=constraint_net.cost_function_zero,  # we do not use this
+                expert_policy = expert_policy_active,
+                unsafe_states = env_configs['unsafe_states'],
+                transition=estimated_transition,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent3.num_timesteps
+        
+        ci = get_hoeffding_ci_active(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=[], zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=0
         #print('ci',np.round(ci,2))
         #input('ci')
@@ -503,24 +513,28 @@ def train(config):
         vareps_itr_list.append(np.round(vareps_itr,2))
 
         """Implements the two-timescale stochastic approximation"""
+        # get v^{c,*}
         v_c = costValueIteration(height=env_configs['map_height'], width=env_configs['map_width'], ci=constraint_net.cost_matrix_sa, n_actions=env_configs['n_actions'], gamma=config['iteration']['gamma'], transition=transition, env=env_active, stopping_threshold=config['iteration']['stopping_threshold'])[env_configs['start_states'][0][0]][env_configs['start_states'][0][0]]
+        v_r = expert_value_function1[0][0] if itra >= 2 else 0
         R_k = cal_R_k(gamma, transition, estimated_transition, expert_policy, expert_policy_active, R_max = 1)
         a_k = constant/itra
         b_k = constant/itra**0.6
         gra_of_x = cal_gra_of_x(lambda_1, lambda_2, constraint_net.cost_matrix_sa, env_active.get_reward_mat_sa(), env_active)
         gra_of_lambda_1 = cal_gra_of_lambda_1(gamma, v_c, vareps_itr, eps, x, constraint_net.cost_matrix_sa)
-        gra_of_lambda_2 = cal_gra_of_lambda_2(gamma, R_k, x, env_active.get_reward_mat_sa())        
-        print('occupancy measure\n', np.round(x, 6),'cost matrix\n', constraint_net.cost_matrix_sa, 'reward_sa\n', env_active.get_reward_mat_sa())
-        #input('occupancy measure')
-        x = update_x(x, gra_of_x, a_k)
-        print('updated occupancy measure\n', np.round(x, 6))
-        #input('updated occupancy measure')
-                                                                                                                   
+        gra_of_lambda_2 = cal_gra_of_lambda_2(gamma, v_r, R_k, x, env_active.get_reward_mat_sa())  
+        #print('v_r',v_r, 'R_k', R_k, 'gra_of_lambda_2', gra_of_lambda_2) 
+        #input('parameter of lambda_2')     
+        print('cost matrix\n', constraint_net.cost_matrix_sa, 'reward_sa\n', env_active.get_reward_mat_sa())
+        print('before update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
+        #input('before update')
+        x = update_x(x, gra_of_x, a_k)                                                                                                           
         lambda_1 = update_lambda_1(lambda_1, gra_of_lambda_1, b_k)
         lambda_2 = update_lambda_2(lambda_2, gra_of_lambda_2, b_k) 
+        print('after update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
+        #input('after update')
         pi_expl = cal_pi_expl(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'], x_k=x, env=env_active, k=itra)
-        print('exploration policy\n', np.round(pi_expl,3), 'occupancy measure\n', np.round(x,3))
-        #input('pi_expl and occupancy measure')
+        print('exploration policy\n', np.round(pi_expl,3))
+        #input('pi_expl')
         obs, acs = env_active.step_from_pi_expl_active(pi_expl,num_of_active=num_of_active)
         print('obs, acs', obs, acs, len(obs)) 
         #input('obs, acs')
