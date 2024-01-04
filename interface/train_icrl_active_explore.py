@@ -387,11 +387,11 @@ def train(config):
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn \hat{c_k}
     nominal_agent3 = create_nominal_agent()#learn V^{\hat{\pi^\expert}}
-    num_of_active = 80 # number of active sampling per iteration
+    num_of_active = 50 # number of active sampling per iteration
     lambda_1 = 0
     lambda_2 = 0
     eps = 0
-    constant = 0.1
+    constant = 0.3
     x = env_active.get_initial_occupancy_measure()
     #expert_value_function1 = 1/(1-config['iteration']['gamma'])*np.array()
     #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
@@ -412,7 +412,7 @@ def train(config):
         print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 30: # config['running']['n_iters']:
+        if itra > 200: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -524,7 +524,7 @@ def train(config):
         gra_of_lambda_2 = cal_gra_of_lambda_2(gamma, v_r, R_k, x, env_active.get_reward_mat_sa())  
         #print('v_r',v_r, 'R_k', R_k, 'gra_of_lambda_2', gra_of_lambda_2) 
         #input('parameter of lambda_2')     
-        print('cost matrix\n', constraint_net.cost_matrix_sa, 'reward_sa\n', env_active.get_reward_mat_sa())
+        #print('cost matrix\n', constraint_net.cost_matrix_sa, 'reward_sa\n', env_active.get_reward_mat_sa())
         #print('before update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
         #input('before update')
         x = update_x(x, gra_of_x, a_k)                                                                                                           
@@ -536,9 +536,9 @@ def train(config):
         print('exploration policy\n', np.round(pi_expl,3))
         #input('pi_expl')
         obs, acs = env_active.step_from_pi_expl_active(pi_expl,num_of_active=num_of_active)
-        print('obs, acs', obs, acs, len(obs)) 
+        #print('obs, acs', obs, acs, len(obs)) 
         #input('obs, acs')
-    print('ci',np.round(ci,2))
+    #print('ci',np.round(ci,2))
     #input('ci')
     #print('exploration policy', pi_expl)
     #input('pi_expl')
