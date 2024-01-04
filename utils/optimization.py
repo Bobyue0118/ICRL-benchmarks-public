@@ -3,8 +3,8 @@ import numpy as np
 
 """Implements the two-timescale stochastic approximation"""
 
-def cal_gra_of_x(lambda_1, lambda_2, cost_k, reward, env):
-    gra_of_x = -lambda_1*cost_k-(1+lambda_2)*reward
+def cal_gra_of_x(lambda_1, lambda_2, ci, cost_k, reward, env):
+    gra_of_x = -ci+lambda_1*cost_k-lambda_2*reward
     # gradient of invalid (s,a) equals to zero
     for i in range(env.h):
             for j in range(env.w):
@@ -20,7 +20,7 @@ def cal_gra_of_x(lambda_1, lambda_2, cost_k, reward, env):
 def cal_gra_of_lambda_1(gamma, v_c, vareps_k, eps, x, cost_k):
     #print(v_c,vareps_k,np.sum(x*cost_k))
     #input('inside gra_of_lambda_1')
-    return (1-gamma)*(v_c-4*vareps_k-eps)-np.sum(x*cost_k)
+    return -(1-gamma)*(v_c+4*vareps_k+2*eps)+np.sum(x*cost_k)
 
 def cal_gra_of_lambda_2(gamma, v_r, R_k, x, reward):
     return (1-gamma)*(v_r+R_k)-np.sum(x*reward)

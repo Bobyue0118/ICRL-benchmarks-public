@@ -391,7 +391,7 @@ def train(config):
     lambda_1 = 0
     lambda_2 = 0
     eps = 0
-    constant = 0.5
+    constant = 0.1
     x = env_active.get_initial_occupancy_measure()
     #expert_value_function1 = 1/(1-config['iteration']['gamma'])*np.array()
     #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
@@ -412,7 +412,7 @@ def train(config):
         print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 50: # config['running']['n_iters']:
+        if itra > 30: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -519,18 +519,18 @@ def train(config):
         R_k = cal_R_k(gamma, transition, estimated_transition, expert_policy, expert_policy_active, R_max = 1)
         a_k = constant/itra
         b_k = constant/itra**0.6
-        gra_of_x = cal_gra_of_x(lambda_1, lambda_2, constraint_net.cost_matrix_sa, env_active.get_reward_mat_sa(), env_active)
+        gra_of_x = cal_gra_of_x(lambda_1, lambda_2, ci, constraint_net.cost_matrix_sa, env_active.get_reward_mat_sa(), env_active)
         gra_of_lambda_1 = cal_gra_of_lambda_1(gamma, v_c, vareps_itr, eps, x, constraint_net.cost_matrix_sa)
         gra_of_lambda_2 = cal_gra_of_lambda_2(gamma, v_r, R_k, x, env_active.get_reward_mat_sa())  
         #print('v_r',v_r, 'R_k', R_k, 'gra_of_lambda_2', gra_of_lambda_2) 
         #input('parameter of lambda_2')     
         print('cost matrix\n', constraint_net.cost_matrix_sa, 'reward_sa\n', env_active.get_reward_mat_sa())
-        print('before update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
+        #print('before update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
         #input('before update')
         x = update_x(x, gra_of_x, a_k)                                                                                                           
         lambda_1 = update_lambda_1(lambda_1, gra_of_lambda_1, b_k)
         lambda_2 = update_lambda_2(lambda_2, gra_of_lambda_2, b_k) 
-        print('after update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
+        #print('after update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
         #input('after update')
         pi_expl = cal_pi_expl(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'], x_k=x, env=env_active, k=itra)
         print('exploration policy\n', np.round(pi_expl,3))
