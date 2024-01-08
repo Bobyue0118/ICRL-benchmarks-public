@@ -173,11 +173,11 @@ class PolicyIterationLagrange(ABC):
             #input('self.v_m1')
             # Run the policy improvement algorithm
             policy_stable = self.policy_improvement(cost_function, transition)
-            cumu_reward, length, dual_stable = self.dual_update(cost_function)
+            cumu_reward, length, dual_stable, traj = self.dual_update(cost_function)
         logger.record("train/iterations", iter)
         logger.record("train/cumulative rewards", cumu_reward)
         logger.record("train/length", length)
-        return self.v_m
+        return self.v_m, traj
 
     # expert learn its value function, Q-value function, thus advantage function
     def expert_learn(self,
@@ -265,8 +265,8 @@ class PolicyIterationLagrange(ABC):
                                                    cumu_reward),
               file=self.log_file,
               flush=True)
-        dual_stable = True if costs_game_mean == 0 else False
-        return cumu_reward, length, dual_stable
+        dual_stable = True if costs_game_mean == 0 and cumu_reward ==1 else False
+        return cumu_reward, length, dual_stable,np.asarray(obs_game).tolist()
 
     def policy_evaluation(self, cost_function, transition):
         iter = 0
@@ -358,6 +358,8 @@ class PolicyIterationLagrange(ABC):
                 # Check whether the policy has changed
                 if not (old_pi == self.pi[x, y, :]).all():
                     policy_stable = False
+                #if np.sum(abs(old_pi - self.pi[x, y, :]))>0.01:
+                    #policy_stable = False
 
         return policy_stable
 

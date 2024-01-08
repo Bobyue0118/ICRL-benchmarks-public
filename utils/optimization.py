@@ -8,8 +8,8 @@ def cal_gra_of_x(lambda_1, lambda_2, ci, cost_k, reward, env):
     # gradient of invalid (s,a) equals to zero
     for i in range(env.h):
             for j in range(env.w):
-                if [i, j] in env.terminals:
-                    gra_of_x[i][j] = 0
+                #if [i, j] in env.terminals:
+                    #gra_of_x[i][j] = 0
                 if (i==0 or i==6 or j==0 or j==6) and ([i, j] not in env.terminals):
                     for action in range(env.n_actions):
                         next_state = [i+env.neighbors[action][0], j+env.neighbors[action][1]]

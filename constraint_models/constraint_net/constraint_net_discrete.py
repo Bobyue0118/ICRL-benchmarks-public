@@ -45,10 +45,14 @@ class ConstraintDiscrete(nn.Module):
         self._build()
 
     def _build(self) -> None:
+        self.true_cost_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
+        for unsafe_state in self.env_configs['unsafe_states']:
+            self.true_cost_matrix[unsafe_state[0]][unsafe_state[1]]=1
         self.cost_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.cost_matrix_weight = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.cost_matrix_sa = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
         self.cost_matrix_zero = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
+        self.cost_matrix_one = np.zeros([self.env_configs['map_height'], self.env_configs['map_width']])
         self.expert_policy_matrix = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
         self.expert_policy_matrix_copy = np.zeros([self.env_configs['map_height'], self.env_configs['map_width'], self.env_configs['n_actions']])
         self.recon_obs = False
@@ -59,6 +63,17 @@ class ConstraintDiscrete(nn.Module):
             cost.append(self.cost_matrix[int(obs[i, 0])][int(obs[i, 1])])
         #print('obs',obs)
         #print('self.cost_matrix',self.cost_matrix)
+        #print('cost',cost)
+        #print('np.asarray(cost)',np.asarray(cost),obs.shape[0])
+        #input('Enter...')
+        return np.asarray(cost)
+
+    def cost_function_one(self, obs: np.ndarray, acs: np.ndarray, force_mode: str = None) -> np.ndarray:
+        cost = []
+        for i in range(obs.shape[0]):
+            cost.append(self.cost_matrix_one[int(obs[i, 0])][int(obs[i, 1])])
+        #print('obs',obs)
+        #print('self.cost_matrix_one',self.cost_matrix_one)
         #print('cost',cost)
         #print('np.asarray(cost)',np.asarray(cost),obs.shape[0])
         #input('Enter...')
@@ -168,6 +183,8 @@ class ConstraintDiscrete(nn.Module):
                             self.cost_matrix[next_state[0]][next_state[1]] += mov_probs * self.cost_matrix_sa[i][j][k]
         self.cost_matrix /= min_A # 除以大于零的最小的A
         self.cost_matrix[self.cost_matrix<0.05*np.amax(self.cost_matrix)]=0 # 有些因为概率导致的cost略大于0可以删去
+        self.cost_matrix_one = copy.deepcopy(self.cost_matrix)
+        self.cost_matrix_one[self.cost_matrix_one>0]=1#cost设置为1
         #self.cost_matrix[self.cost_matrix>=0.04*np.amax(self.cost_matrix)]=1
         # Prepare data
         #nominal_obs = np.concatenate(nominal_obs, axis=0)
@@ -185,6 +202,7 @@ class ConstraintDiscrete(nn.Module):
                 #self.cost_matrix[nominal_obs[i][0]][nominal_obs[i][1]] = 1
         np.set_printoptions(suppress=True)
         print('self.cost_matrix\n',np.round(self.cost_matrix,2))
+        print('self.cost_matrix_one\n',np.round(self.cost_matrix_one,2))
         bw_metrics = {"backward/test": 'True'}
 
         return bw_metrics

@@ -128,7 +128,7 @@ class WallGridworld(gym.Env):
                     for m in self.get_next_states_and_probs([i,j],k):
                         self.orig_transition[i,j,k,m[0][0],m[0][1]] = m[1]
         for terminal_state in self.terminals:
-            for k in range(self.n_actions):
+            for k in self.get_actions(terminal_state):
                 self.orig_transition[terminal_state[0],terminal_state[1],k,terminal_state[0],terminal_state[1]]=1
         return self.orig_transition
 
@@ -362,8 +362,8 @@ class WallGridworld(gym.Env):
                         if k not in self.get_actions([i,j]):# or [i,j] in self.terminals:
                             sampling_count[i,j,k] = np.nan
             for terminal_state in self.terminals:
-                print(self.terminals)
-                input('1')
+                #print(self.terminals)
+                #input('1')
                 for k in range(self.n_actions):
                     sampling_count[terminal_state[0],terminal_state[1],k]=0    
             return self.greedy_sampling_matrix_normalized, sampling_count, self.expert_policy_greedy

@@ -28,7 +28,7 @@ from stable_baselines3.common import logger
 from stable_baselines3.common.vec_env import sync_envs_normalization, VecNormalize
 from utils.data_utils import read_args, load_config, ProgressBarManager, del_and_make, load_expert_data, \
     get_input_features_dim, process_memory, print_resource
-from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_active, costValueIteration
+from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_active, costValueIteration, cal_GIoU, cal_discounted_cumulative_rewards, cal_discounted_cumulative_costs
 from utils.optimization import cal_gra_of_x, cal_gra_of_lambda_1, cal_gra_of_lambda_2, cal_R_k, update_x, update_lambda_1, update_lambda_2, cal_pi_expl
 
 import warnings  # disable warnings
@@ -99,6 +99,8 @@ def train(config):
         os.mkdir('{0}/{1}/'.format(config['env']['save_dir'], config['task']))
     if not os.path.exists(save_model_mother_dir):
         os.mkdir(save_model_mother_dir)
+    if not os.path.exists(save_model_mother_dir+ '/cost_matrix_estimated'):
+        os.mkdir(save_model_mother_dir+ '/cost_matrix_estimated')
     print("Saving to the file: {0}".format(save_model_mother_dir), file=log_file, flush=True)
     # save the running config
     with open(os.path.join(save_model_mother_dir, "model_hyperparameters.yaml"), "w") as hyperparam_file:
@@ -315,6 +317,8 @@ def train(config):
     # visualize the cost function for gridworld
     if 'WGW' in config['env']['train_env_id']:
         ture_cost_function = get_true_cost_function(env_id=config['env']['train_env_id'], env_configs=env_configs)
+        #print('true_cost_function', ture_cost_function)
+        #input('true_cost_function')
         constraint_visualization_2d(cost_function=ture_cost_function,
                                     feature_range=config['env']["visualize_info_ranges"],
                                     select_dims=config['env']["record_info_input_dims"],
@@ -392,7 +396,15 @@ def train(config):
     lambda_2 = 0
     eps = 0
     constant = 0.3
+    kappa = 0.1
     x = env_active.get_initial_occupancy_measure()
+    GIoU = []
+    plot_itra = [10, 20, 25, 30, 35, 40, 45, 50, 100, 200, 500]
+    rewards_expert = []
+    costs_expert = []
+    rewards_agent = []
+    costs_agent = []
+    num_of_itra = 100
     #expert_value_function1 = 1/(1-config['iteration']['gamma'])*np.array()
     #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
 
@@ -409,10 +421,10 @@ def train(config):
         #print('Active sampling with {} per iteration'.format(num_of_active))#
         #print('transition', np.round(transition,4))
         #input('transition')
-        print('sample_count', np.round(sample_count,1))
+        #print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 200: # config['running']['n_iters']:
+        if itra > num_of_itra: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -423,7 +435,7 @@ def train(config):
             # get expert policy for unsafe states, use true cost function
             print('\n#####get expert policy for unsafe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function_unsafe = nominal_agent0.learn(
+                expert_value_function_unsafe, _ = nominal_agent0.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function_zero,  # without constraint
                 transition = transition,
@@ -441,7 +453,7 @@ def train(config):
             # get expert policy for safe states, use true cost function
             print('\n#####get expert policy for safe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function = nominal_agent1.learn(
+                expert_value_function, traj_expert = nominal_agent1.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=ture_cost_function,  # with true constraint
                 transition = transition,
@@ -457,11 +469,17 @@ def train(config):
                 for unsafe_state in env_configs['unsafe_states']:
                     #print('unsafe_state', unsafe_state)
                     expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
+            for cnt in range(num_of_itra):
+                rewards_expert.append(cal_discounted_cumulative_rewards(traj=traj_expert, reward_states=env_configs['reward_states'], gamma=gamma))
+                costs_expert.append(cal_discounted_cumulative_costs(traj=traj_expert, unsafe_states=env_configs['unsafe_states'], gamma=gamma))
+            #print('rewards_expert', rewards_expert)
+            #input('rewards_expert')
             #print('expert policy for safe states\n', np.round(expert_policy,2))
             #input('expert policy safe')
             #print('expert policy for complete\n', np.round(expert_policy,2))
             #input('expert policy complete')
-            print('expert value function safe\n', np.round(expert_value_function,3))
+            #print('expert value function safe\n', np.round(expert_value_function,3))
+            #input('expert value function safe')
             #input('itr:1')
 
         if itra >= 2: 
@@ -480,14 +498,46 @@ def train(config):
                 forward_metrics = logger.Logger.CURRENT.name_to_value
                 timesteps += nominal_agent2.num_timesteps
 
-            print('expert value function complete\n', np.round(expert_value_function,3),'expert_policy_active', expert_policy_active)
+            #print('expert value function complete\n', np.round(expert_value_function,3),'expert_policy_active', expert_policy_active)
             #input('expert value function complete')
             # update c_k
             constraint_net.train_traj_nn(nominal_obs=[], advantage_function=advantage_function)
+            if itra in plot_itra:
+                constraint_visualization_2d(cost_function=constraint_net.cost_function,
+                                            feature_range=config['env']["visualize_info_ranges"],
+                                            select_dims=config['env']["record_info_input_dims"],
+                                            num_points_per_feature=env_configs['map_height'],#本来没有这个kw,就会有偏差
+                                            obs_dim=train_env.observation_space.shape[0],
+                                            acs_dim=1 if is_discrete else train_env.action_space.shape[0],
+                                            save_path=save_model_mother_dir+ '/cost_matrix_estimated',
+                                            model_name=args.config_file.split('/')[-1].split('.')[0],
+                                            title='Iteration-{0}'.format(itra),
+                                            force_mode='mean',
+                                            )
+            GIoU.append(np.round(cal_GIoU(constraint_net.true_cost_matrix,constraint_net.cost_matrix),3))
+            #print('constraint_net.true_cost_matrix', constraint_net.true_cost_matrix)
+            #print('constraint_net.cost_matrix', constraint_net.cost_matrix)
+            print('GIoU', itra, cal_GIoU(constraint_net.true_cost_matrix,constraint_net.cost_matrix))
+            #input('constraint_net.true_cost_matrix')
+            
             #print('Q value function complete\n', np.round(Q_value_function,3))
             #print('advantage function complete\n', np.round(advantage_function,3))
             #print('sample_count', sample_count)
             #input('itr:2')
+
+            print('\n#####learn identified constraint for discounted cumulative rewards and costs#####', itra, '\n')
+            nominal_agent = create_nominal_agent()
+            with ProgressBarManager(forward_timesteps) as callback:                
+                _, traj =nominal_agent.learn(
+                total_timesteps=forward_timesteps,
+                cost_function=constraint_net.cost_function_one,  # Cost should come from cost wrapper
+                transition=transition,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent.num_timesteps
+            rewards_agent.append(np.round(cal_discounted_cumulative_rewards(traj=traj, reward_states=env_configs['reward_states'], gamma=gamma),5))
+            costs_agent.append(np.round(cal_discounted_cumulative_costs(traj=traj, unsafe_states=env_configs['unsafe_states'], gamma=gamma),5))
 
             print("####Learn V^{r,\hat{\pi^\expert}}####")
             with ProgressBarManager(forward_timesteps) as callback:
@@ -501,7 +551,7 @@ def train(config):
             )
                 forward_metrics = logger.Logger.CURRENT.name_to_value
                 timesteps += nominal_agent3.num_timesteps
-        
+
         ci = get_hoeffding_ci_active(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=[], zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=0
         #print('ci',np.round(ci,2))
@@ -518,7 +568,7 @@ def train(config):
         v_r = expert_value_function1[0][0] if itra >= 2 else 0
         R_k = cal_R_k(gamma, transition, estimated_transition, expert_policy, expert_policy_active, R_max = 1)
         a_k = constant/itra
-        b_k = constant/itra**0.6
+        b_k = constant/itra**(0.5+kappa)
         gra_of_x = cal_gra_of_x(lambda_1, lambda_2, ci, constraint_net.cost_matrix_sa, env_active.get_reward_mat_sa(), env_active)
         gra_of_lambda_1 = cal_gra_of_lambda_1(gamma, v_c, vareps_itr, eps, x, constraint_net.cost_matrix_sa)
         gra_of_lambda_2 = cal_gra_of_lambda_2(gamma, v_r, R_k, x, env_active.get_reward_mat_sa())  
@@ -526,14 +576,16 @@ def train(config):
         #input('parameter of lambda_2')     
         #print('cost matrix\n', constraint_net.cost_matrix_sa, 'reward_sa\n', env_active.get_reward_mat_sa())
         #print('before update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
+        #print('x',x,'gra_of_x',gra_of_x)
         #input('before update')
         x = update_x(x, gra_of_x, a_k)                                                                                                           
         lambda_1 = update_lambda_1(lambda_1, gra_of_lambda_1, b_k)
         lambda_2 = update_lambda_2(lambda_2, gra_of_lambda_2, b_k) 
         #print('after update\n','occupancy measure\n', np.round(x, 6), 'lambda_1', lambda_1, 'lambda_2', lambda_2)
+        #print('x',x)
         #input('after update')
         pi_expl = cal_pi_expl(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'], x_k=x, env=env_active, k=itra)
-        print('exploration policy\n', np.round(pi_expl,3))
+        #print('exploration policy\n', np.round(pi_expl,3),x)
         #input('pi_expl')
         obs, acs = env_active.step_from_pi_expl_active(pi_expl,num_of_active=num_of_active)
         #print('obs, acs', obs, acs, len(obs)) 
@@ -544,10 +596,12 @@ def train(config):
     #input('pi_expl')
 
 
-
+    print('rewards and costs:', rewards_expert[0], costs_expert[0], rewards_agent, costs_agent)
+    input('discounted and cumulative rewards and costs')
     #print(sample_count)
+    print(GIoU)
     print(vareps_itr_list)
-    input('itra, vareps_itr')
+    input('GIoU, vareps_itr')
 
     for itr in range(3):#range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:
@@ -559,7 +613,7 @@ def train(config):
         if itr >= 1:
             print('\n#####learn identified constraint#####', itr, '\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                _ =nominal_agent.learn(
+                _, traj =nominal_agent.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function,  # Cost should come from cost wrapper
                 transition=estimated_transition,

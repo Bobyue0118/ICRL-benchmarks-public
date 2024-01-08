@@ -402,3 +402,51 @@ def costValueIteration(height, width, ci, n_actions, gamma, transition, env, sto
             #input('v')            
             break
     return v_prime
+
+def cal_GIoU(a, b):
+    #a = np.array([[0,0,0,0],[0,1,1,0],[0,0,0,0],[0,0,0,0]])
+    #b = np.array([[0,0,0,0],[0,1,1,0],[0,0,0,0],[0,1,1,0]])
+    #a[a>0] = 1
+    #b[b>0] = 1
+    #print(a,np.round(b,2))
+    #print(np.logical_or(a,b).astype(int))
+    #assert a.shape==b.shape, "shape of a and b does not match!"
+    c = np.zeros(a.shape)
+    positive_b = b[b>0]
+    positive_b_min = np.min(positive_b) if len(positive_b)>0 else 1
+    if np.sum(a*b)>0:
+        GIoU = np.sum(a*b/positive_b_min)/np.sum(np.maximum(a,b/positive_b_min))# weighted GIoU
+    else:
+        if not np.all(b==0):#b中存在元素不为0
+            nonzero_indices_a = np.nonzero(a)
+            nonzero_indices_b = np.nonzero(b) 
+            print(nonzero_indices_a[0],nonzero_indices_a[1])
+            min_x = min(np.min(nonzero_indices_a[0]), np.min(nonzero_indices_b[0]))
+            min_y = min(np.min(nonzero_indices_a[1]), np.min(nonzero_indices_b[1]))
+            max_x = max(np.max(nonzero_indices_a[0]), np.max(nonzero_indices_b[0]))
+            max_y = max(np.max(nonzero_indices_a[1]), np.max(nonzero_indices_b[1]))
+            print(min_x,min_y,max_x,max_y)
+            for i in range(min_x, max_x+1):
+                for j in range(min_y, max_y+1):
+                    c[i,j] = 1
+        else: #b中所有元素都是0
+            c = deepcopy(a)
+        #print(c)
+        GIoU = -np.sum(c-np.logical_or(a,b).astype(int))/np.sum(c)
+    #print(GIoU)
+    return GIoU
+
+def cal_discounted_cumulative_rewards(traj, reward_states, gamma):
+    rewards = 0
+    for i in range(len(traj)):
+        if traj[i] in reward_states:
+            rewards += gamma**(i+1) * 1
+    return rewards
+
+def cal_discounted_cumulative_costs(traj, unsafe_states, gamma):
+    costs = 0
+    for i in range(len(traj)):
+        if traj[i] in unsafe_states:
+            costs += gamma**(i+1) * 1
+    return costs
+        

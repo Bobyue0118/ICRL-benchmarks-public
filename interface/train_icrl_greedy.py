@@ -402,7 +402,7 @@ def train(config):
         #print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 500: # config['running']['n_iters']:
+        if itra > 40: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -411,7 +411,7 @@ def train(config):
             # get expert policy for unsafe states, use true cost function
             print('\n#####get expert policy for unsafe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function_unsafe = nominal_agent0.learn(
+                expert_value_function_unsafe, _ = nominal_agent0.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function_zero,  # without constraint
                 transition = transition,
@@ -430,7 +430,7 @@ def train(config):
             # get expert policy for safe states, use true cost function
             print('\n#####get expert policy for safe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function = nominal_agent1.learn(
+                expert_value_function, _ = nominal_agent1.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=ture_cost_function,  # Cost should come from cost wrapper
                 transition = transition,
@@ -516,7 +516,7 @@ def train(config):
         if itr >= 1:
             print('\n#####learn identified constraint#####', itr, '\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                _ =nominal_agent.learn(
+                _, _ =nominal_agent.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function,  # Cost should come from cost wrapper
                 transition=estimated_transition,

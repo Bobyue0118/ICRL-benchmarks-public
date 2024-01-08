@@ -25,6 +25,7 @@ def get_true_cost_function(env_id, env_configs={}):
         return partial(wall_behind, -3)
     elif env_id in ["WGW-v0"]:
         unsafe_states = env_configs['unsafe_states']
+        #input('here1')
         return partial(wall_in, unsafe_states)
     # elif env_id == "AntWallTest-v0":
     #     return partial(wall_behind, -3)
@@ -73,7 +74,7 @@ def wall_in(unsafe_states, obs, acs):
     #print('obs:',obs)
     #print('unsafe_states',unsafe_states)
     #print('(obs in unsafe_states)',(obs in unsafe_states))
-    #input('obs')
+    #input('obs108')
     if isinstance(obs, list):
         return (obs in unsafe_states)
     elif isinstance(obs, np.ndarray):
