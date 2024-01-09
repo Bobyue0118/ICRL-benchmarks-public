@@ -249,6 +249,7 @@ def load_ppo_config(config, train_env, seed, log_file):
 def get_hoeffding_ci_us(height, width, n_actions, sample_count, v_m, zeta_max, gamma, epsilon, delta=0.01):
     n_states = height*width
     sample_count = np.maximum(sample_count, 1)
+    r_max = 1
     #print('sample_count1',sample_count)
     #input('in')
     ci = np.sqrt(
@@ -259,6 +260,7 @@ def get_hoeffding_ci_us(height, width, n_actions, sample_count, v_m, zeta_max, g
     #input('in2')
     v_m = np.repeat(v_m, n_actions).reshape(height, width, n_actions)
     ci *= gamma * (2*zeta_max* np.max(v_m)/(1-gamma)  + epsilon)
+    #ci *= gamma * (2*zeta_max*r_max /(1-gamma)**2  + epsilon)
     #print('ci',np.round(ci,1))
     #input('in3')
     return ci
@@ -277,6 +279,7 @@ def get_hoeffding_ci_active(height, width, n_actions, sample_count, v_m, zeta_ma
     #input('in2')
     #v_m = np.repeat(v_m, n_actions).reshape(height, width, n_actions)
     ci *= gamma * ((zeta_max/(1-gamma))*(2*r_max/(1-gamma)+r_max*(1+gamma)/(1-gamma))  + epsilon)
+    #ci *= gamma * (((3+gamma)/(1-gamma)**2)*(r_max)*zeta_max)  + epsilon)
     #print('ci',np.round(ci,1))
     #input('in3')
     return ci
@@ -295,6 +298,7 @@ def get_hoeffding_ci_greedy(height, width, n_actions, sample_count, v_m, zeta_ma
     #input('in2')
     v_m = np.repeat(v_m, n_actions).reshape(height, width, n_actions)
     ci *= gamma * ((zeta_max/(1-gamma))*(2*np.max(v_m)+r_max*(1+gamma)/(1-gamma))  + epsilon)
+    #ci *= gamma * (((3+gamma)/(1-gamma)**2)*(r_max)*zeta_max)  + epsilon)
     #print('ci',np.round(ci,1))
     #input('in3')
     return ci

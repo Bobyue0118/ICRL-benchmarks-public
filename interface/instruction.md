@@ -10,3 +10,8 @@ uniform sampling在sample_from_agent()中，self.env.reset()设置初始位置�
 
 uniform sampling: python train_icrl.py ../config/mujoco_WGW-discrete-v0/train_ICRL_discrete_WGW-v0-setting1.yaml
 greedy ICRL: python train_icrl_greedy.py ../config/mujoco_WGW-discrete-v0/train_ICRL_discrete_WGW-v0-setting1.yaml
+active exploration: python train_icrl_active_explore.py ../config/mujoco_WGW-discrete-v0/train_ICRL_discrete_WGW-v0-setting1.yaml
+
+lambda_1,lambda_2,constant,kappa
+1/3/4-constraint: 0,0,0.3,0.1
+2nd-constraint: -1000,1000,0.25,0.15

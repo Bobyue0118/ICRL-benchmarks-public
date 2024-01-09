@@ -402,7 +402,7 @@ def train(config):
         #print('sample_count', np.round(sample_count,1))
         #input('sample_count')
 
-        if itra > 40: # config['running']['n_iters']:
+        if itra > 52: # config['running']['n_iters']:
             break
         else:
             itra += 1
@@ -515,6 +515,7 @@ def train(config):
         # learn identified constraint
         if itr >= 1:
             print('\n#####learn identified constraint#####', itr, '\n')
+            nominal_agent = create_nominal_agent()
             with ProgressBarManager(forward_timesteps) as callback:
                 _, _ =nominal_agent.learn(
                 total_timesteps=forward_timesteps,

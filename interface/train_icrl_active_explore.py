@@ -392,10 +392,10 @@ def train(config):
     nominal_agent2 = create_nominal_agent()#learn \hat{c_k}
     nominal_agent3 = create_nominal_agent()#learn V^{\hat{\pi^\expert}}
     num_of_active = 50 # number of active sampling per iteration
-    lambda_1 = 0
-    lambda_2 = 0
+    lambda_1 = 0 #0 for 1st constraint                                                                                                            
+    lambda_2 = 0 #0 for 1st constraint 
     eps = 0
-    constant = 0.3
+    constant = 0.3#0.3 for 1st constraint
     kappa = 0.1
     x = env_active.get_initial_occupancy_measure()
     GIoU = []
@@ -404,7 +404,7 @@ def train(config):
     costs_expert = []
     rewards_agent = []
     costs_agent = []
-    num_of_itra = 100
+    num_of_itra = 500
     #expert_value_function1 = 1/(1-config['iteration']['gamma'])*np.array()
     #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
 
@@ -524,20 +524,26 @@ def train(config):
             #print('advantage function complete\n', np.round(advantage_function,3))
             #print('sample_count', sample_count)
             #input('itr:2')
+            #print('\n#####learn identified constraint for discounted cumulative rewards and costs#####', itra, '\n')
+            for cnt in range(5):
+                rewards_tmp = []
+                costs_tmp = []
+                nominal_agent = create_nominal_agent()
+                with ProgressBarManager(forward_timesteps) as callback:                
+                    _, traj =nominal_agent.learn(
+                    total_timesteps=forward_timesteps,
+                    cost_function=constraint_net.cost_function,  # Cost should come from cost wrapper
+                    transition=estimated_transition,
+                    callback=[callback] + all_callbacks
+                )
+                    forward_metrics = logger.Logger.CURRENT.name_to_value
+                    timesteps += nominal_agent.num_timesteps                
+                rewards_tmp.append(np.round(cal_discounted_cumulative_rewards(traj=traj, reward_states=env_configs['reward_states'], gamma=gamma),5))
+                costs_tmp.append(np.round(cal_discounted_cumulative_costs(traj=traj, unsafe_states=env_configs['unsafe_states'], gamma=gamma),5))
+            rewards_tmp=np.array(rewards_tmp)
+            rewards_agent.append(np.max(rewards_tmp[np.where(costs_tmp==np.min(np.array(costs_tmp)))]))
+            costs_agent.append(np.min(np.array(costs_tmp)))
 
-            print('\n#####learn identified constraint for discounted cumulative rewards and costs#####', itra, '\n')
-            nominal_agent = create_nominal_agent()
-            with ProgressBarManager(forward_timesteps) as callback:                
-                _, traj =nominal_agent.learn(
-                total_timesteps=forward_timesteps,
-                cost_function=constraint_net.cost_function_one,  # Cost should come from cost wrapper
-                transition=transition,
-                callback=[callback] + all_callbacks
-            )
-                forward_metrics = logger.Logger.CURRENT.name_to_value
-                timesteps += nominal_agent.num_timesteps
-            rewards_agent.append(np.round(cal_discounted_cumulative_rewards(traj=traj, reward_states=env_configs['reward_states'], gamma=gamma),5))
-            costs_agent.append(np.round(cal_discounted_cumulative_costs(traj=traj, unsafe_states=env_configs['unsafe_states'], gamma=gamma),5))
 
             print("####Learn V^{r,\hat{\pi^\expert}}####")
             with ProgressBarManager(forward_timesteps) as callback:
@@ -612,6 +618,7 @@ def train(config):
         # learn identified constraint
         if itr >= 1:
             print('\n#####learn identified constraint#####', itr, '\n')
+            nominal_agent = create_nominal_agent()
             with ProgressBarManager(forward_timesteps) as callback:
                 _, traj =nominal_agent.learn(
                 total_timesteps=forward_timesteps,
