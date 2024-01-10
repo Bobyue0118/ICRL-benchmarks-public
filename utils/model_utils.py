@@ -421,23 +421,25 @@ def cal_GIoU(a, b):
     if np.sum(a*b)>0:
         GIoU = np.sum(a*b/positive_b_min)/np.sum(np.maximum(a,b/positive_b_min))# weighted GIoU
     else:
-        if not np.all(b==0):#b中存在元素不为0
-            nonzero_indices_a = np.nonzero(a)
-            nonzero_indices_b = np.nonzero(b) 
-            print(nonzero_indices_a[0],nonzero_indices_a[1])
-            min_x = min(np.min(nonzero_indices_a[0]), np.min(nonzero_indices_b[0]))
-            min_y = min(np.min(nonzero_indices_a[1]), np.min(nonzero_indices_b[1]))
-            max_x = max(np.max(nonzero_indices_a[0]), np.max(nonzero_indices_b[0]))
-            max_y = max(np.max(nonzero_indices_a[1]), np.max(nonzero_indices_b[1]))
-            print(min_x,min_y,max_x,max_y)
-            for i in range(min_x, max_x+1):
-                for j in range(min_y, max_y+1):
-                    c[i,j] = 1
-        else: #b中所有元素都是0
-            c = deepcopy(a)
+        GIoU = np.exp(-np.sum(np.maximum(a,b/positive_b_min)))-1
+        #if not np.all(b==0):#b中存在元素不为0
+            #nonzero_indices_a = np.nonzero(a)
+            #nonzero_indices_b = np.nonzero(b) 
+            #print(nonzero_indices_a[0],nonzero_indices_a[1])
+            #min_x = min(np.min(nonzero_indices_a[0]), np.min(nonzero_indices_b[0]))
+            #min_y = min(np.min(nonzero_indices_a[1]), np.min(nonzero_indices_b[1]))
+            #max_x = max(np.max(nonzero_indices_a[0]), np.max(nonzero_indices_b[0]))
+            #max_y = max(np.max(nonzero_indices_a[1]), np.max(nonzero_indices_b[1]))
+            #print(min_x,min_y,max_x,max_y)
+            #for i in range(min_x, max_x+1):
+                #for j in range(min_y, max_y+1):
+                    #c[i,j] = 1
+        #else: #b中所有元素都是0
+            #c = deepcopy(a)
         #print(c)
-        GIoU = -np.sum(c-np.logical_or(a,b).astype(int))/np.sum(c)
-    #print(GIoU)
+        #GIoU = -np.sum(c-np.logical_or(a,b).astype(int))/np.sum(c)
+    print(GIoU)
+    #input('GIoU1')
     return GIoU
 
 def cal_discounted_cumulative_rewards(traj, reward_states, gamma):

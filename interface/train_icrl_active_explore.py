@@ -404,7 +404,7 @@ def train(config):
     costs_expert = []
     rewards_agent = []
     costs_agent = []
-    num_of_itra = 500
+    num_of_itra = 50
     #expert_value_function1 = 1/(1-config['iteration']['gamma'])*np.array()
     #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
 
@@ -525,7 +525,7 @@ def train(config):
             #print('sample_count', sample_count)
             #input('itr:2')
             #print('\n#####learn identified constraint for discounted cumulative rewards and costs#####', itra, '\n')
-            for cnt in range(5):
+            for cnt in range(1):
                 rewards_tmp = []
                 costs_tmp = []
                 nominal_agent = create_nominal_agent()
