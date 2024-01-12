@@ -28,8 +28,7 @@ from stable_baselines3.common import logger
 from stable_baselines3.common.vec_env import sync_envs_normalization, VecNormalize
 from utils.data_utils import read_args, load_config, ProgressBarManager, del_and_make, load_expert_data, \
     get_input_features_dim, process_memory, print_resource
-from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_greedy, valueIteration
-
+from utils.model_utils import load_ppo_config, load_policy_iteration_config, get_hoeffding_ci_us, get_hoeffding_ci_greedy, valueIteration, cal_GIoU, cal_discounted_cumulative_rewards, cal_discounted_cumulative_costs
 import warnings  # disable warnings
 
 from mujuco_environment.custom_envs.envs.wall_gird_word import WallGridworld
@@ -98,6 +97,8 @@ def train(config):
         os.mkdir('{0}/{1}/'.format(config['env']['save_dir'], config['task']))
     if not os.path.exists(save_model_mother_dir):
         os.mkdir(save_model_mother_dir)
+    if not os.path.exists(save_model_mother_dir+ '/cost_matrix_estimated'):
+        os.mkdir(save_model_mother_dir+ '/cost_matrix_estimated')
     print("Saving to the file: {0}".format(save_model_mother_dir), file=log_file, flush=True)
     # save the running config
     with open(os.path.join(save_model_mother_dir, "model_hyperparameters.yaml"), "w") as hyperparam_file:
@@ -379,18 +380,25 @@ def train(config):
     nominal_agent0 = create_nominal_agent()#learn without constraint
     nominal_agent1 = create_nominal_agent()#learn expert policy
     nominal_agent2 = create_nominal_agent()#learn V(s) under expert policy
-    num_of_greedy = 50 # number of greedy sampling per iteration
-    
+    num_of_random = 50 # number of greedy sampling per iteration
+    num_of_itra = 500
+    gamma = config['iteration']['gamma']
+    GIoU = []
+    plot_itra = [10, 20, 25, 30, 35, 40, 45, 50, 100, 200, 500]
+    rewards_expert = []
+    costs_expert = []
+    rewards_agent = []
+    costs_agent = []
 
     while vareps_itr > vareps:
 
 	# greedy sampling, update for estimated transition and estimated expert policy
         if itra == 0:
-            _, sample_count, _ = env_greedy.greedy_sampling(0)
+            estimated_transition, sample_count, expert_policy_random = env_greedy.greedy_sampling(0)
         else:
-            estimated_transition, sample_count, expert_policy_greedy = env_greedy.greedy_sampling(num_of_greedy, obs, acs, expert_policy)
+            estimated_transition, sample_count, expert_policy_random = env_greedy.greedy_sampling(num_of_random, obs, acs, expert_policy)
         transition = env_greedy.get_original_transition()
-        #print('Uniform sampling with {} per iteration'.format(num_of_greedy))#
+        #print('Uniform sampling with {} per iteration'.format(num_of_random))#
         #print('transition', np.round(transition,4))
         #input('transition')
 
@@ -403,7 +411,7 @@ def train(config):
             # get expert policy for unsafe states, use true cost function
             print('\n#####get expert policy for unsafe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function_unsafe = nominal_agent0.learn(
+                expert_value_function_unsafe, _ = nominal_agent0.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=constraint_net.cost_function_zero,  # without constraint
                 transition = transition,
@@ -422,7 +430,7 @@ def train(config):
             # get expert policy for safe state, use true cost function
             print('\n#####get expert policy for safe states#####\n')
             with ProgressBarManager(forward_timesteps) as callback:
-                expert_value_function = nominal_agent1.learn(
+                expert_value_function, traj_expert = nominal_agent1.learn(
                 total_timesteps=forward_timesteps,
                 cost_function=ture_cost_function,  # Cost should come from cost wrapper
                 transition = transition,
@@ -439,6 +447,9 @@ def train(config):
                 for unsafe_state in env_configs['unsafe_states']:
                     #print('unsafe_state', unsafe_state)
                     expert_policy[unsafe_state[0]][unsafe_state[1]] = expert_policy_unsafe[unsafe_state[0]][unsafe_state[1]]
+            for cnt in range(num_of_itra):
+                rewards_expert.append(cal_discounted_cumulative_rewards(traj=traj_expert, reward_states=env_configs['reward_states'], gamma=gamma))
+                costs_expert.append(cal_discounted_cumulative_costs(traj=traj_expert, unsafe_states=env_configs['unsafe_states'], gamma=gamma))
             #print('expert policy for safe states\n', np.round(expert_policy,2))
             #input('expert policy safe')
             #print('expert policy for complete\n', np.round(expert_policy,2))
@@ -446,11 +457,73 @@ def train(config):
             print('expert value function safe\n', np.round(expert_value_function,3))
             #input('itr:1')
 
+        if itra >= 2: 
+            # update \hat{c_k}
+            print('\n#####Update c_k#####\n')
+    
+            with ProgressBarManager(forward_timesteps) as callback:
+                expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
+                total_timesteps=forward_timesteps,
+                cost_function=ture_cost_function,  # we do not use this
+                expert_policy = expert_policy_random,
+                unsafe_states = env_configs['unsafe_states'],
+                transition=estimated_transition,
+                callback=[callback] + all_callbacks
+            )
+                forward_metrics = logger.Logger.CURRENT.name_to_value
+                timesteps += nominal_agent2.num_timesteps
+
+            #print('expert value function complete\n', np.round(expert_value_function,3),'expert_policy_random', expert_policy_random)
+            #input('expert value function complete')
+            # update c_k
+            constraint_net.train_traj_nn(nominal_obs=[], advantage_function=advantage_function)
+            if itra in plot_itra:
+                constraint_visualization_2d(cost_function=constraint_net.cost_function,
+                                            feature_range=config['env']["visualize_info_ranges"],
+                                            select_dims=config['env']["record_info_input_dims"],
+                                            num_points_per_feature=env_configs['map_height'],#本来没有这个kw,就会有偏差
+                                            obs_dim=train_env.observation_space.shape[0],
+                                            acs_dim=1 if is_discrete else train_env.action_space.shape[0],
+                                            save_path=save_model_mother_dir+ '/cost_matrix_estimated',
+                                            model_name=args.config_file.split('/')[-1].split('.')[0],
+                                            title='Iteration-{0}'.format(itra),
+                                            force_mode='mean',
+                                            )
+            GIoU.append(np.round(cal_GIoU(constraint_net.true_cost_matrix,constraint_net.cost_matrix),3))
+            #print('constraint_net.true_cost_matrix', constraint_net.true_cost_matrix)
+            #print('constraint_net.cost_matrix', constraint_net.cost_matrix)
+            print('GIoU', itra, cal_GIoU(constraint_net.true_cost_matrix,constraint_net.cost_matrix))
+            #input('constraint_net.true_cost_matrix')
+            
+            #print('Q value function complete\n', np.round(Q_value_function,3))
+            #print('advantage function complete\n', np.round(advantage_function,3))
+            #print('sample_count', sample_count)
+            #input('itr:2')
+            #print('\n#####learn identified constraint for discounted cumulative rewards and costs#####', itra, '\n')
+            for cnt in range(1):
+                rewards_tmp = []
+                costs_tmp = []
+                nominal_agent = create_nominal_agent()
+                with ProgressBarManager(forward_timesteps) as callback:                
+                    _, traj =nominal_agent.learn(
+                    total_timesteps=forward_timesteps,
+                    cost_function=constraint_net.cost_function,  # Cost should come from cost wrapper
+                    transition=estimated_transition,
+                    callback=[callback] + all_callbacks
+                )
+                    forward_metrics = logger.Logger.CURRENT.name_to_value
+                    timesteps += nominal_agent.num_timesteps                
+                rewards_tmp.append(np.round(cal_discounted_cumulative_rewards(traj=traj, reward_states=env_configs['reward_states'], gamma=gamma),5))
+                costs_tmp.append(np.round(cal_discounted_cumulative_costs(traj=traj, unsafe_states=env_configs['unsafe_states'], gamma=gamma),5))
+            rewards_tmp=np.array(rewards_tmp)
+            rewards_agent.append(np.max(rewards_tmp[np.where(costs_tmp==np.min(np.array(costs_tmp)))]))
+            costs_agent.append(np.min(np.array(costs_tmp)))
+
         ci = get_hoeffding_ci_greedy(height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions'],     sample_count=sample_count, v_m=expert_value_function, zeta_max=config['iteration']['zeta_max'], gamma=config['iteration']['gamma'], 	epsilon=config['iteration']['epsilon'], delta=0.1)
         ci[np.where(np.isnan(ci))]=-np.inf
         #print('ci',np.round(ci,2))
         #input('ci')
-        vareps_itr = np.max(ci)/(1-config['iteration']['gamma'])
+        vareps_itr = gamma*np.max(ci)/(1-config['iteration']['gamma'])
         print('itra, vareps_itr', itra, vareps_itr)#, np.max(sample_count))
         #input('vareps_itr')
         np.set_printoptions(suppress=True)
@@ -459,7 +532,7 @@ def train(config):
         pi_expl = nominal_agent1.get_equiprobable_policy()
         #print('exploration policy', pi_expl)
         #input('pi_expl')
-        obs, acs = env_greedy.step_from_pi_expl(pi_expl,num_of_greedy=num_of_greedy)
+        obs, acs = env_greedy.step_from_pi_expl(pi_expl,num_of_greedy=num_of_random)
         #print('obs, acs', env_greedy.step_from_pi_expl(pi_expl))
         #input('obs, acs')
 
@@ -472,7 +545,7 @@ def train(config):
         expert_value_function, Q_value_function, advantage_function = nominal_agent2.expert_learn(
         total_timesteps=forward_timesteps,
         cost_function=ture_cost_function,  # Cost should come from cost wrapper
-        expert_policy = expert_policy_greedy,
+        expert_policy = expert_policy_random,
         #v_m = expert_value_function,
         #env_for_us=env_greedy,
         unsafe_states = env_configs['unsafe_states'],
@@ -489,8 +562,13 @@ def train(config):
     #input('itr:2')
 
     #print(sample_count)
-    print(vareps_itr_list)
-    input('itra, vareps_itr')
+    #print(vareps_itr_list)
+    #input('itra, vareps_itr')
+    print('rewards and costs:', rewards_expert[0], costs_expert[0], rewards_agent, costs_agent)
+    input('discounted and cumulative rewards and costs')
+    print(GIoU)
+    input('GIoU, vareps_itr')
+
 
     for itr in range(3):#range(config['running']['n_iters']):
         if reset_policy and itr % reset_every == 0:

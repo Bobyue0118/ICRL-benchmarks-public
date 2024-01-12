@@ -404,7 +404,7 @@ def train(config):
     costs_expert = []
     rewards_agent = []
     costs_agent = []
-    num_of_itra = 50
+    num_of_itra = 500
     #expert_value_function1 = 1/(1-config['iteration']['gamma'])*np.array()
     #cost_k = np.zeros((height=env_configs['map_height'], width=env_configs['map_width'], n_actions=env_configs['n_actions']))
 
